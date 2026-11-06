@@ -27,3 +27,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Templates HTML/CSS embutidos: linhas longas são intencionais.
+"src/credit_monitoring/contracts/report.py" = ["E501"]
