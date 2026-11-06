@@ -1,0 +1,148 @@
+{
+  "batch_name": "lote_valido",
+  "validated_at": "2026-11-06T19:45:41+00:00",
+  "status": "aprovado",
+  "n_rows": 500,
+  "n_rows_with_violations": 0,
+  "violated_rules": [],
+  "warnings": [
+    "W1",
+    "W2"
+  ],
+  "rules": [
+    {
+      "rule_id": "R1",
+      "title": "Schema estrito",
+      "description": "Todas as colunas obrigatórias presentes, nenhuma coluna extra (evita vazamento de dados não previstos, como CPF) e valores numéricos válidos.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": true,
+      "affected_rows": 0,
+      "examples": []
+    },
+    {
+      "rule_id": "R2",
+      "title": "Sem valores nulos",
+      "description": "Nenhuma coluna pode ter valores ausentes.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": true,
+      "affected_rows": 0,
+      "examples": []
+    },
+    {
+      "rule_id": "R3",
+      "title": "Idade válida",
+      "description": "Idade entre 18 e 100 anos.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": true,
+      "affected_rows": 0,
+      "examples": []
+    },
+    {
+      "rule_id": "R4",
+      "title": "Limite de crédito válido",
+      "description": "Limite de crédito maior que zero e até 5.000.000.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": true,
+      "affected_rows": 0,
+      "examples": []
+    },
+    {
+      "rule_id": "R5",
+      "title": "Domínios categóricos",
+      "description": "Sexo em {1, 2}, escolaridade em {1, 2, 3, 4}, estado civil em {1, 2, 3}, status de pagamento entre -2 e 9 e alvo (quando presente) em {0, 1}.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": true,
+      "affected_rows": 0,
+      "examples": []
+    },
+    {
+      "rule_id": "R6",
+      "title": "Pagamentos não negativos",
+      "description": "Valores pagos (pay_amt_*) maiores ou iguais a zero.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": true,
+      "affected_rows": 0,
+      "examples": []
+    },
+    {
+      "rule_id": "R7",
+      "title": "Sem duplicatas",
+      "description": "client_id único e nenhum registro idêntico a outro (reenvio em duplicidade).",
+      "blocking": true,
+      "evaluated": true,
+      "passed": true,
+      "affected_rows": 0,
+      "examples": []
+    },
+    {
+      "rule_id": "W1",
+      "title": "Fatura negativa",
+      "description": "Fatura com saldo credor (valor negativo): possível, mas incomum.",
+      "blocking": false,
+      "evaluated": true,
+      "passed": false,
+      "affected_rows": 36,
+      "examples": [
+        {
+          "indice": 13,
+          "coluna": "bill_amt_6",
+          "valor": "-890.0",
+          "checagem": "W1_fatura_negativa"
+        },
+        {
+          "indice": 21,
+          "coluna": "bill_amt_6",
+          "valor": "-12.0",
+          "checagem": "W1_fatura_negativa"
+        },
+        {
+          "indice": 27,
+          "coluna": "bill_amt_1",
+          "valor": "-9.0",
+          "checagem": "W1_fatura_negativa"
+        },
+        {
+          "indice": 40,
+          "coluna": "bill_amt_6",
+          "valor": "-150.0",
+          "checagem": "W1_fatura_negativa"
+        },
+        {
+          "indice": 41,
+          "coluna": "bill_amt_6",
+          "valor": "-160.0",
+          "checagem": "W1_fatura_negativa"
+        }
+      ]
+    },
+    {
+      "rule_id": "W2",
+      "title": "Uso acima do limite",
+      "description": "Fatura mais recente acima de 1,5x o limite de crédito.",
+      "blocking": false,
+      "evaluated": true,
+      "passed": false,
+      "affected_rows": 2,
+      "examples": [
+        {
+          "indice": 246,
+          "coluna": "client_id",
+          "valor": "4d7b9c04adef16c5",
+          "checagem": "W2_uso_acima_do_limite"
+        },
+        {
+          "indice": 284,
+          "coluna": "client_id",
+          "valor": "13aadb1bc74b2369",
+          "checagem": "W2_uso_acima_do_limite"
+        }
+      ]
+    }
+  ]
+}

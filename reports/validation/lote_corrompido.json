@@ -1,0 +1,236 @@
+{
+  "batch_name": "lote_corrompido",
+  "validated_at": "2026-11-06T19:45:41+00:00",
+  "status": "bloqueado",
+  "n_rows": 503,
+  "n_rows_with_violations": 19,
+  "violated_rules": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7"
+  ],
+  "warnings": [],
+  "rules": [
+    {
+      "rule_id": "R1",
+      "title": "Schema estrito",
+      "description": "Todas as colunas obrigatórias presentes, nenhuma coluna extra (evita vazamento de dados não previstos, como CPF) e valores numéricos válidos.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": false,
+      "affected_rows": 1,
+      "examples": [
+        {
+          "indice": null,
+          "coluna": null,
+          "valor": "cpf",
+          "checagem": "column_in_schema"
+        },
+        {
+          "indice": 473,
+          "coluna": "age",
+          "valor": "trinta",
+          "checagem": "coerce_dtype('int64')"
+        }
+      ]
+    },
+    {
+      "rule_id": "R2",
+      "title": "Sem valores nulos",
+      "description": "Nenhuma coluna pode ter valores ausentes.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": false,
+      "affected_rows": 4,
+      "examples": [
+        {
+          "indice": 40,
+          "coluna": "education",
+          "valor": "nulo",
+          "checagem": "not_nullable"
+        },
+        {
+          "indice": 46,
+          "coluna": "limit_bal",
+          "valor": "nulo",
+          "checagem": "not_nullable"
+        },
+        {
+          "indice": 132,
+          "coluna": "limit_bal",
+          "valor": "nulo",
+          "checagem": "not_nullable"
+        },
+        {
+          "indice": 472,
+          "coluna": "limit_bal",
+          "valor": "nulo",
+          "checagem": "not_nullable"
+        }
+      ]
+    },
+    {
+      "rule_id": "R3",
+      "title": "Idade válida",
+      "description": "Idade entre 18 e 100 anos.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": false,
+      "affected_rows": 3,
+      "examples": [
+        {
+          "indice": 45,
+          "coluna": "age",
+          "valor": "15",
+          "checagem": "R3_idade"
+        },
+        {
+          "indice": 232,
+          "coluna": "age",
+          "valor": "15",
+          "checagem": "R3_idade"
+        },
+        {
+          "indice": 428,
+          "coluna": "age",
+          "valor": "130",
+          "checagem": "R3_idade"
+        }
+      ]
+    },
+    {
+      "rule_id": "R4",
+      "title": "Limite de crédito válido",
+      "description": "Limite de crédito maior que zero e até 5.000.000.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": false,
+      "affected_rows": 3,
+      "examples": [
+        {
+          "indice": 159,
+          "coluna": "limit_bal",
+          "valor": "-5000.0",
+          "checagem": "R4_limite_credito"
+        },
+        {
+          "indice": 291,
+          "coluna": "limit_bal",
+          "valor": "0.0",
+          "checagem": "R4_limite_credito"
+        },
+        {
+          "indice": 326,
+          "coluna": "limit_bal",
+          "valor": "-5000.0",
+          "checagem": "R4_limite_credito"
+        }
+      ]
+    },
+    {
+      "rule_id": "R5",
+      "title": "Domínios categóricos",
+      "description": "Sexo em {1, 2}, escolaridade em {1, 2, 3, 4}, estado civil em {1, 2, 3}, status de pagamento entre -2 e 9 e alvo (quando presente) em {0, 1}.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": false,
+      "affected_rows": 3,
+      "examples": [
+        {
+          "indice": 107,
+          "coluna": "pay_status_1",
+          "valor": "12",
+          "checagem": "R5_status_pagamento"
+        },
+        {
+          "indice": 235,
+          "coluna": "sex",
+          "valor": "7",
+          "checagem": "R5_dominio"
+        },
+        {
+          "indice": 453,
+          "coluna": "education",
+          "valor": "9.0",
+          "checagem": "R5_dominio"
+        }
+      ]
+    },
+    {
+      "rule_id": "R6",
+      "title": "Pagamentos não negativos",
+      "description": "Valores pagos (pay_amt_*) maiores ou iguais a zero.",
+      "blocking": true,
+      "evaluated": true,
+      "passed": false,
+      "affected_rows": 2,
+      "examples": [
+        {
+          "indice": 115,
+          "coluna": "pay_amt_2",
+          "valor": "-100.0",
+          "checagem": "R6_pagamento_negativo"
+        },
+        {
+          "indice": 367,
+          "coluna": "pay_amt_2",
+          "valor": "-100.0",
+          "checagem": "R6_pagamento_negativo"
+        }
+      ]
+    },
+    {
+      "rule_id": "R7",
+      "title": "Sem duplicatas",
+      "description": "client_id único e nenhum registro idêntico a outro (reenvio em duplicidade).",
+      "blocking": true,
+      "evaluated": true,
+      "passed": false,
+      "affected_rows": 3,
+      "examples": [
+        {
+          "indice": 500,
+          "coluna": "client_id",
+          "valor": "5402b192c4053174",
+          "checagem": "R7_registro_duplicado"
+        },
+        {
+          "indice": 501,
+          "coluna": "client_id",
+          "valor": "78ee76bfac47975f",
+          "checagem": "R7_registro_duplicado"
+        },
+        {
+          "indice": 502,
+          "coluna": "client_id",
+          "valor": "92f4863bed65728e",
+          "checagem": "R7_registro_duplicado"
+        }
+      ]
+    },
+    {
+      "rule_id": "W1",
+      "title": "Fatura negativa",
+      "description": "Fatura com saldo credor (valor negativo): possível, mas incomum.",
+      "blocking": false,
+      "evaluated": false,
+      "passed": true,
+      "affected_rows": 0,
+      "examples": []
+    },
+    {
+      "rule_id": "W2",
+      "title": "Uso acima do limite",
+      "description": "Fatura mais recente acima de 1,5x o limite de crédito.",
+      "blocking": false,
+      "evaluated": false,
+      "passed": true,
+      "affected_rows": 0,
+      "examples": []
+    }
+  ]
+}
