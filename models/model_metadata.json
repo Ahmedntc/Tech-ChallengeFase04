@@ -1,0 +1,131 @@
+{
+  "model_name": "credit-scoring-model",
+  "version": "v20261106194543",
+  "trained_at": "2026-11-06T19:45:43+00:00",
+  "champion": "xgboost",
+  "selection_criterion": "maior AUC na validação",
+  "threshold": 0.27507951855659485,
+  "threshold_criterion": "máximo F1 na validação",
+  "features": [
+    "limit_bal",
+    "education",
+    "age",
+    "pay_status_1",
+    "pay_status_2",
+    "pay_status_3",
+    "pay_status_4",
+    "pay_status_5",
+    "pay_status_6",
+    "bill_amt_1",
+    "bill_amt_2",
+    "bill_amt_3",
+    "bill_amt_4",
+    "bill_amt_5",
+    "bill_amt_6",
+    "pay_amt_1",
+    "pay_amt_2",
+    "pay_amt_3",
+    "pay_amt_4",
+    "pay_amt_5",
+    "pay_amt_6"
+  ],
+  "excluded_features": [
+    "sex",
+    "marriage"
+  ],
+  "excluded_features_reason": "Minimização e não discriminação (LGPD, art. 6º, III e IX): mantidos só para auditoria de vieses.",
+  "data": {
+    "reference_fingerprint": "059bdd29879b01f962c5c8f4bf71e380c5af4c36b8c4da50185499fa790d4a0b",
+    "n_train": 13424,
+    "n_valid": 3356,
+    "n_test": 4195,
+    "default_rate_train": 0.2212455303933254
+  },
+  "candidates": {
+    "logistic_regression": {
+      "threshold": 0.27532870482259014,
+      "valid": {
+        "auc": 0.7446216994538644,
+        "gini": 0.4892433989077287,
+        "ks": 0.4003056464236432,
+        "brier": 0.14241786848149515,
+        "f1": 0.534082923401265,
+        "precision": 0.5588235294117647,
+        "recall": 0.5114401076716016,
+        "accuracy": 0.8024433849821215,
+        "predicted_default_rate": 0.2026221692491061,
+        "actual_default_rate": 0.22139451728247914,
+        "mean_score": 0.22158798030578272,
+        "tn": 2313,
+        "fp": 300,
+        "fn": 363,
+        "tp": 380
+      },
+      "test": {
+        "auc": 0.7256578322409044,
+        "gini": 0.4513156644818088,
+        "ks": 0.3857349619496955,
+        "brier": 0.1457872612718855,
+        "f1": 0.5149971703452179,
+        "precision": 0.5423122765196663,
+        "recall": 0.49030172413793105,
+        "accuracy": 0.7957091775923719,
+        "predicted_default_rate": 0.2,
+        "actual_default_rate": 0.22121573301549463,
+        "mean_score": 0.21848838389227698,
+        "tn": 2883,
+        "fp": 384,
+        "fn": 473,
+        "tp": 455
+      }
+    },
+    "xgboost": {
+      "threshold": 0.27507951855659485,
+      "valid": {
+        "auc": 0.7880333810809295,
+        "gini": 0.5760667621618589,
+        "ks": 0.45770629202058866,
+        "brier": 0.1301763504743576,
+        "f1": 0.5716120745022479,
+        "precision": 0.5466830466830467,
+        "recall": 0.5989232839838493,
+        "accuracy": 0.8012514898688915,
+        "predicted_default_rate": 0.24255065554231228,
+        "actual_default_rate": 0.22139451728247914,
+        "mean_score": 0.22119289636611938,
+        "tn": 2244,
+        "fp": 369,
+        "fn": 298,
+        "tp": 445
+      },
+      "test": {
+        "auc": 0.7782529118246203,
+        "gini": 0.5565058236492406,
+        "ks": 0.43576240461036697,
+        "brier": 0.13556261360645294,
+        "f1": 0.5319693094629157,
+        "precision": 0.5063291139240507,
+        "recall": 0.5603448275862069,
+        "accuracy": 0.7818831942789034,
+        "predicted_default_rate": 0.24481525625744935,
+        "actual_default_rate": 0.22121573301549463,
+        "mean_score": 0.2184535264968872,
+        "tn": 2760,
+        "fp": 507,
+        "fn": 408,
+        "tp": 520
+      }
+    }
+  },
+  "random_seed": 42,
+  "libraries": {
+    "scikit-learn": "1.9.1",
+    "xgboost": "3.4.1",
+    "pandas": "2.3.3"
+  },
+  "mlflow": {
+    "experiment": "credit-scoring-training",
+    "registered_model": "credit-scoring-model",
+    "registered_version": 1
+  }
+}
