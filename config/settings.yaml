@@ -1,0 +1,26 @@
+# Configuração central do projeto.
+# Caminhos relativos são resolvidos a partir da raiz do repositório.
+
+project:
+  name: credit-monitoring
+  random_seed: 42
+
+dataset:
+  name: Default of Credit Card Clients
+  source: UCI Machine Learning Repository (id 350)
+  doi: 10.24432/C55S3H
+  license: CC BY 4.0
+  url: https://archive.ics.uci.edu/static/public/350/default+of+credit+card+clients.zip
+  raw_file: data/raw/default_of_credit_card_clients.xls
+  # A planilha original tem uma linha de título antes do cabeçalho real.
+  header_row: 1
+  target_column: default payment next month
+  expected_shape: [30000, 25]
+  # SHA-256 do conteúdo tabular (CSV canônico), independente do formato do arquivo.
+  content_sha256: 4edce6da569b2c30788a85fd98a9bafb1a983e8ca1a7aac875dd7ff853cbd0bb
+
+paths:
+  raw_dir: data/raw
+  reference_dir: data/reference
+  production_dir: data/production
+  quarantine_dir: data/quarantine

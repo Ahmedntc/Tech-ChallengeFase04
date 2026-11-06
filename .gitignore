@@ -218,3 +218,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Projeto: artefatos gerados ---
+# Camadas de dados derivadas (reproduzíveis a partir de data/raw)
+data/reference/*
+data/production/*
+data/quarantine/*
+!data/reference/.gitkeep
+!data/production/.gitkeep
+!data/quarantine/.gitkeep
+
+# MLflow (tracking local)
+mlruns/
+mlartifacts/
+mlflow.db
