@@ -19,8 +19,51 @@ dataset:
   # SHA-256 do conteúdo tabular (CSV canônico), independente do formato do arquivo.
   content_sha256: 4edce6da569b2c30788a85fd98a9bafb1a983e8ca1a7aac875dd7ff853cbd0bb
 
+pseudonymization:
+  # A chave vem desta variável de ambiente; se ausente, de um arquivo local não versionado.
+  key_env_var: PSEUDONYMIZATION_KEY
+  key_file: .secrets/pseudonymization.key
+
+split:
+  # Fração separada como Pool de Produção (nunca usada no treino).
+  production_fraction: 0.30
+  # Dentro da Referência: fração de teste (avaliação final do modelo).
+  test_size: 0.20
+  # Dentro do treino: fração de validação (escolha do campeão e do limiar de decisão).
+  valid_size: 0.20
+
 paths:
   raw_dir: data/raw
-  reference_dir: data/reference
-  production_dir: data/production
+  reference_file: data/reference/reference.parquet
+  production_pool_file: data/production/production_pool.parquet
+  incoming_dir: data/incoming
   quarantine_dir: data/quarantine
+  validation_reports_dir: reports/validation
+  model_file: models/credit_model.joblib
+  model_metadata_file: models/model_metadata.json
+
+contract_demo:
+  # Tamanho dos lotes de demonstração (válido e corrompido).
+  batch_size: 500
+
+model:
+  # Atributos fora do modelo por minimização e não discriminação (LGPD, art. 6º, III e IX).
+  # Continuam no dataset apenas para auditoria de vieses (Etapa 4).
+  excluded_features: [sex, marriage]
+  logistic_regression:
+    C: 1.0
+    max_iter: 2000
+  xgboost:
+    n_estimators: 300
+    max_depth: 4
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    min_child_weight: 5
+
+mlflow:
+  # Banco SQLite local (não versionado) e pasta de artefatos.
+  tracking_db: mlflow.db
+  artifact_dir: mlruns
+  training_experiment: credit-scoring-training
+  registered_model: credit-scoring-model

@@ -22,8 +22,12 @@ O pipeline confere a **impressão digital do conteúdo** (SHA-256 do CSV canôni
 |---|---|---|
 | `raw/` | Planilha original da UCI, imutável | sim |
 | `reference/` | Dataset de Referência, o único usado no treino | não (gerado) |
-| `production/` | Lotes mensais simulados onde o drift acontece | não (gerado) |
+| `production/` | Pool de Produção e lotes mensais simulados onde o drift acontece | não (gerado) |
+| `incoming/` | Área de entrada: lotes recebidos aguardando o gate de ingestão | não (gerado) |
 | `quarantine/` | Lotes rejeitados pelo contrato de dados | não (gerado) |
+
+As camadas geradas usam nomes de colunas padronizados (`limit_bal`, `age`, `pay_status_1..6`,
+`bill_amt_1..6`, `pay_amt_1..6`, `default`) e o identificador pseudonimizado `client_id`.
 
 ## Dicionário de dados (original)
 
@@ -44,12 +48,10 @@ O pipeline confere a **impressão digital do conteúdo** (SHA-256 do CSV canôni
 
 ## Problemas de qualidade encontrados no dado bruto
 
-Esses pontos serão tratados (e documentados) na preparação do dataset de Referência:
-
-| Problema | Ocorrências |
-|---|---|
-| Linhas duplicadas (ignorando `ID`) | 35 |
-| `EDUCATION` com códigos não documentados (0) ou desconhecidos (5, 6) | 14 + 280 + 51 |
-| `MARRIAGE` com código não documentado (0) | 54 |
-| Clientes com alguma fatura negativa (saldo credor) | 1.930 |
-| Distribuição do alvo | 22,12% inadimplentes (6.636 de 30.000) |
+| Problema | Ocorrências | Tratamento (`make prepare`) |
+|---|---|---|
+| Linhas duplicadas (ignorando `ID`), idênticas inclusive no alvo | 35 | Removidas (mantida a primeira ocorrência) |
+| `EDUCATION` com códigos não documentados (0) ou desconhecidos (5, 6) | 14 + 280 + 51 | Agrupados em 4 ("outros") |
+| `MARRIAGE` com código não documentado (0) | 54 | Agrupado em 3 ("outros") |
+| Clientes com alguma fatura negativa (saldo credor) | 1.930 | Mantidos: situação real, sinalizada pela regra de alerta W1 |
+| Distribuição do alvo | 22,12% inadimplentes (6.636 de 30.000) | Separação estratificada pelo alvo |

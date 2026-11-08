@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Validação — lote_corrompido</title>
+<style>
+:root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#5b6474; --line:#e3e6eb;
+        --ok:#1f7a4d; --ok-bg:#e3f4ea; --fail:#b42318; --fail-bg:#fde8e7;
+        --warn:#8a5a00; --warn-bg:#fff4d6; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text);
+       font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:32px 16px 48px; }
+.eyebrow { margin:0; color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.06em; }
+h1 { margin:4px 0 12px; font-size:28px; }
+.badge { display:inline-block; padding:4px 12px; border-radius:999px; font-weight:600; font-size:14px; }
+.badge.ok { background:var(--ok-bg); color:var(--ok); }
+.badge.fail { background:var(--fail-bg); color:var(--fail); }
+.stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:24px 0; }
+.stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+.stat b { display:block; font-size:24px; font-variant-numeric:tabular-nums; }
+.stat span { color:var(--muted); font-size:13px; }
+.table-wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; }
+table { width:100%; border-collapse:collapse; min-width:760px; }
+th, td { padding:10px 12px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line); }
+th { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+tr:last-child td { border-bottom:none; }
+td.num { font-variant-numeric:tabular-nums; text-align:right; }
+.desc { color:var(--muted); font-size:13px; }
+.pill { display:inline-block; white-space:nowrap; padding:2px 8px; border-radius:6px; font-size:12px; font-weight:600; }
+.pill.ok { background:var(--ok-bg); color:var(--ok); }
+.pill.fail { background:var(--fail-bg); color:var(--fail); }
+.pill.warn { background:var(--warn-bg); color:var(--warn); }
+.pill.skip { background:var(--line); color:var(--muted); }
+td.ex-cell { min-width:300px; }
+ul.ex { margin:0; padding-left:18px; font-size:13px; }
+code { white-space:nowrap; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+footer { margin-top:24px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Relatório de validação do contrato de dados</p>
+  <h1>lote_corrompido</h1>
+  <span class="badge fail">BLOQUEADO</span> <span class="desc">Lote bloqueado e enviado para a quarentena: nenhum registro chega ao modelo.</span>
+  <section class="stats"><div class="stat"><b>503</b><span>registros recebidos</span></div><div class="stat"><b>19</b><span>registros com violação</span></div><div class="stat"><b>7</b><span>regras rígidas violadas</span></div><div class="stat"><b>0</b><span>alertas</span></div></section>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>Regra</th><th>Tipo</th><th>Resultado</th>
+      <th>Registros afetados</th><th>Exemplos</th></tr></thead>
+      <tbody><tr><td><b>R1</b></td><td><b>Schema estrito</b><div class='desc'>Todas as colunas obrigatórias presentes, nenhuma coluna extra (evita vazamento de dados não previstos, como CPF) e valores numéricos válidos.</div></td><td>rígida</td><td><span class="pill fail">violada</span></td><td class='num'>1</td><td class='ex-cell'><ul class=ex><li>coluna não prevista no contrato: <code>cpf</code></li><li>índice 473 · <code>age</code> = <code>trinta</code></li></ul></td></tr><tr><td><b>R2</b></td><td><b>Sem valores nulos</b><div class='desc'>Nenhuma coluna pode ter valores ausentes.</div></td><td>rígida</td><td><span class="pill fail">violada</span></td><td class='num'>4</td><td class='ex-cell'><ul class=ex><li>índice 40 · <code>education</code> = <code>nulo</code></li><li>índice 46 · <code>limit_bal</code> = <code>nulo</code></li><li>índice 132 · <code>limit_bal</code> = <code>nulo</code></li><li>índice 472 · <code>limit_bal</code> = <code>nulo</code></li></ul></td></tr><tr><td><b>R3</b></td><td><b>Idade válida</b><div class='desc'>Idade entre 18 e 100 anos.</div></td><td>rígida</td><td><span class="pill fail">violada</span></td><td class='num'>3</td><td class='ex-cell'><ul class=ex><li>índice 45 · <code>age</code> = <code>15</code></li><li>índice 232 · <code>age</code> = <code>15</code></li><li>índice 428 · <code>age</code> = <code>130</code></li></ul></td></tr><tr><td><b>R4</b></td><td><b>Limite de crédito válido</b><div class='desc'>Limite de crédito maior que zero e até 5.000.000.</div></td><td>rígida</td><td><span class="pill fail">violada</span></td><td class='num'>3</td><td class='ex-cell'><ul class=ex><li>índice 159 · <code>limit_bal</code> = <code>-5000.0</code></li><li>índice 291 · <code>limit_bal</code> = <code>0.0</code></li><li>índice 326 · <code>limit_bal</code> = <code>-5000.0</code></li></ul></td></tr><tr><td><b>R5</b></td><td><b>Domínios categóricos</b><div class='desc'>Sexo em {1, 2}, escolaridade em {1, 2, 3, 4}, estado civil em {1, 2, 3}, status de pagamento entre -2 e 9 e alvo (quando presente) em {0, 1}.</div></td><td>rígida</td><td><span class="pill fail">violada</span></td><td class='num'>3</td><td class='ex-cell'><ul class=ex><li>índice 107 · <code>pay_status_1</code> = <code>12</code></li><li>índice 235 · <code>sex</code> = <code>7</code></li><li>índice 453 · <code>education</code> = <code>9.0</code></li></ul></td></tr><tr><td><b>R6</b></td><td><b>Pagamentos não negativos</b><div class='desc'>Valores pagos (pay_amt_*) maiores ou iguais a zero.</div></td><td>rígida</td><td><span class="pill fail">violada</span></td><td class='num'>2</td><td class='ex-cell'><ul class=ex><li>índice 115 · <code>pay_amt_2</code> = <code>-100.0</code></li><li>índice 367 · <code>pay_amt_2</code> = <code>-100.0</code></li></ul></td></tr><tr><td><b>R7</b></td><td><b>Sem duplicatas</b><div class='desc'>client_id único e nenhum registro idêntico a outro (reenvio em duplicidade).</div></td><td>rígida</td><td><span class="pill fail">violada</span></td><td class='num'>3</td><td class='ex-cell'><ul class=ex><li>índice 500 · <code>client_id</code> = <code>5402b192c4053174</code></li><li>índice 501 · <code>client_id</code> = <code>78ee76bfac47975f</code></li><li>índice 502 · <code>client_id</code> = <code>92f4863bed65728e</code></li></ul></td></tr><tr><td><b>W1</b></td><td><b>Fatura negativa</b><div class='desc'>Fatura com saldo credor (valor negativo): possível, mas incomum.</div></td><td>alerta</td><td><span class="pill skip">não avaliada</span></td><td class='num'>—</td><td class='ex-cell'></td></tr><tr><td><b>W2</b></td><td><b>Uso acima do limite</b><div class='desc'>Fatura mais recente acima de 1,5x o limite de crédito.</div></td><td>alerta</td><td><span class="pill skip">não avaliada</span></td><td class='num'>—</td><td class='ex-cell'></td></tr></tbody>
+    </table>
+  </div>
+  <footer>Validado em 2026-11-06T19:45:41+00:00 (UTC) · contrato Pandera ·
+  regras de alerta só são avaliadas em lotes aprovados.</footer>
+</main>
+</body>
+</html>

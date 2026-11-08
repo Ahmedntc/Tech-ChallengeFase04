@@ -224,6 +224,7 @@ __marimo__/
 data/reference/*
 data/production/*
 data/quarantine/*
+data/incoming/
 !data/reference/.gitkeep
 !data/production/.gitkeep
 !data/quarantine/.gitkeep
@@ -232,3 +233,9 @@ data/quarantine/*
 mlruns/
 mlartifacts/
 mlflow.db
+
+# Segredos locais (chave de pseudonimização)
+.secrets/
+
+# Artefato binário do modelo (regenerado por `make train`; os metadados são versionados)
+models/*.joblib
