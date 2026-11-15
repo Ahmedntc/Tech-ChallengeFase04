@@ -139,13 +139,16 @@ def apply_unemployment(
     affected = rng.choice(on_time, size=round(len(df) * rate), replace=False)
     delays = rng.choice([1, 2, 3], size=len(affected), p=[0.4, 0.4, 0.2])
 
-    for idx, delay in zip(affected, delays, strict=True):
-        for month in range(1, delay + 1):
-            status_col = f"pay_status_{month}"
-            df.loc[idx, status_col] = max(df.loc[idx, status_col], delay - month + 1)
-            df.loc[idx, f"pay_amt_{month}"] = 0.0
-        if rng.random() < default_rate_by_delay[int(delay)]:
-            labels.loc[idx] = 1
+    for month in range(1, int(delays.max(initial=0)) + 1):
+        reached = delays >= month
+        rows = affected[reached]
+        status_col = f"pay_status_{month}"
+        df.loc[rows, status_col] = np.maximum(
+            df.loc[rows, status_col].to_numpy(), delays[reached] - month + 1
+        )
+        df.loc[rows, f"pay_amt_{month}"] = 0.0
+    default_probability = np.array([default_rate_by_delay[int(d)] for d in delays])
+    labels.loc[affected[rng.random(len(affected)) < default_probability]] = 1
     return df, labels, len(affected)
 
 
