@@ -26,6 +26,7 @@ import json
 import logging
 import sys
 from dataclasses import asdict, dataclass, fields
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -34,6 +35,7 @@ import pandas as pd
 from credit_monitoring.config import load_settings, resolve_path
 from credit_monitoring.contracts.corrupt import make_corrupted_batch
 from credit_monitoring.data.columns import BILL_AMT, FEATURES, ID_COLUMN, PAY_AMT, TARGET
+from credit_monitoring.monitoring.logger import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +59,9 @@ class MonthScenario:
     unemployment: float = 0.0
     # Probabilidade extra de inadimplência no segmento em dia e muito endividado.
     concept_drift: float = 0.0
-    # Gera também um lote corrompido de um parceiro (deve ser barrado pelo contrato).
-    corrupted_partner_batch: bool = False
+    # Lote extra enviado por um parceiro: "corrompido" (deve ser barrado pelo contrato)
+    # ou "vazio" (arquivo de 0 byte, simulando uma transferência interrompida).
+    partner_batch: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MonthScenario:
@@ -207,6 +210,18 @@ def simulate_month(
     return batch[[ID_COLUMN, *FEATURES]], labels, stats
 
 
+def write_partner_batch(kind: str, path: Path, pool: pd.DataFrame, seed: int) -> None:
+    """Grava o lote extra do parceiro: com dados inválidos ou como arquivo vazio."""
+    if kind == "corrompido":
+        partner = pool.drop(columns=[TARGET]).sample(300, random_state=seed)
+        corrupted, _ = make_corrupted_batch(partner, seed)
+        corrupted.to_csv(path, index=False)
+    elif kind == "vazio":
+        path.write_bytes(b"")
+    else:
+        raise ValueError(f"Tipo de lote de parceiro desconhecido: {kind}")
+
+
 def simulate(settings: dict[str, Any] | None = None) -> dict[str, Any]:
     """Gera todos os meses do cenário e grava lotes, rótulos e manifesto."""
     settings = settings or load_settings()
@@ -234,11 +249,9 @@ def simulate(settings: dict[str, Any] | None = None) -> dict[str, Any]:
             labels_dir / f"{scenario.month}.parquet", index=False
         )
         files = [f"{scenario.month}.csv"]
-        if scenario.corrupted_partner_batch:
-            partner = pool.drop(columns=[TARGET]).sample(300, random_state=month_seed)
-            corrupted, _ = make_corrupted_batch(partner, month_seed)
+        if scenario.partner_batch:
             name = f"{scenario.month}{PARTNER_SUFFIX}.csv"
-            corrupted.to_csv(incoming / name, index=False)
+            write_partner_batch(scenario.partner_batch, incoming / name, pool, month_seed)
             files.append(name)
         manifest["months"].append({**asdict(scenario), "files": files, "stats": stats})
         logger.info(
@@ -255,7 +268,7 @@ def simulate(settings: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    configure_logging()
     manifest = simulate()
     print(f"\n{'mês':<5}{'cenário':<28}{'jovens':>8}{'fatura média':>14}{'inadimplência':>15}")
     for month in manifest["months"]:

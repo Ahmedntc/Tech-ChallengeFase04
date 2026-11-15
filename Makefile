@@ -5,7 +5,8 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup data prepare contract-demo validate train simulate drift mlflow-ui all lint format test clean
+.PHONY: help setup data prepare contract-demo validate train simulate drift pipeline dashboard \
+	mlflow-ui all lint format test clean
 
 help: ## Lista os comandos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -38,10 +39,16 @@ simulate: ## Simula 6 meses de produção com drift crescente
 drift: ## Monitora os meses simulados: contrato, predição, drift, desempenho e alertas
 	$(PY) -m credit_monitoring.drift.monitor
 
-mlflow-ui: ## Abre a interface do MLflow em http://127.0.0.1:5000
-	$(BIN)/mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
+pipeline: ## Executa tudo de ponta a ponta com observabilidade (log central, MLflow e dashboard)
+	$(PY) -m credit_monitoring.pipeline
 
-all: data prepare contract-demo train simulate drift ## Executa o pipeline completo
+dashboard: ## Regera o dashboard a partir do log centralizado
+	$(PY) -m credit_monitoring.monitoring.dashboard
+
+mlflow-ui: ## Abre a interface do MLflow em http://127.0.0.1:5000
+	MLFLOW_DISABLE_TELEMETRY=true $(BIN)/mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
+
+all: pipeline contract-demo ## Pipeline completo + demonstração do contrato
 
 lint: ## Verifica estilo e erros com ruff
 	$(BIN)/ruff check src tests

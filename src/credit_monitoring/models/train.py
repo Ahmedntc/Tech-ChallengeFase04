@@ -36,6 +36,7 @@ from credit_monitoring.data.columns import FEATURES, ID_COLUMN, TARGET
 from credit_monitoring.data.download import content_fingerprint
 from credit_monitoring.models.artifacts import ModelBundle
 from credit_monitoring.models.metrics import best_f1_threshold, classification_metrics
+from credit_monitoring.monitoring.logger import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-mlflow", action="store_true", help="Não registra no MLflow")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    configure_logging()
     settings = load_settings()
     bundle, results = train(settings, track=not args.no_mlflow)
 

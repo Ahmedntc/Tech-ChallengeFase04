@@ -55,6 +55,15 @@
   },
   {
     "month": "M5",
+    "category": "pipeline",
+    "severity": "crítico",
+    "subject": "M5_parceiro.csv",
+    "message": "Falha na ingestão de M5_parceiro.csv: arquivo vazio (0 byte). Arquivo enviado para a quarentena.",
+    "value": null,
+    "threshold": null
+  },
+  {
+    "month": "M5",
     "category": "data drift",
     "severity": "atenção",
     "subject": "age",

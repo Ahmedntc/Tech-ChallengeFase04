@@ -239,3 +239,6 @@ mlflow.db
 
 # Artefato binário do modelo (regenerado por `make train`; os metadados são versionados)
 models/*.joblib
+
+# Log centralizado do pipeline (a cópia da última execução fica em reports/monitoring/)
+logs/

@@ -22,6 +22,7 @@ from typing import Any
 import pandas as pd
 
 from credit_monitoring.config import load_settings, resolve_path
+from credit_monitoring.monitoring.logger import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ def ensure_raw_dataset(settings: dict[str, Any] | None = None) -> pd.DataFrame:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    configure_logging()
     settings = load_settings()
     try:
         df = ensure_raw_dataset(settings)

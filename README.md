@@ -18,7 +18,7 @@ Este projeto constrói a camada de sustentação e confiabilidade desse modelo:
 | 0 | Fundação do projeto (estrutura, dependências, ingestão do dataset) | concluída |
 | 1 | Validação de dados e contratos + modelo baseline | concluída |
 | 2 | Simulação e detecção de drift | concluída |
-| 3 | Observabilidade de pipelines e modelos | pendente |
+| 3 | Observabilidade de pipelines e modelos | concluída |
 | 4 | Governança, LGPD e causalidade | pendente |
 | 5 | Entrega final (README consolidado, CI, vídeo) | pendente |
 
@@ -39,8 +39,8 @@ make setup
 make all
 ```
 
-`make all` executa o pipeline completo: verifica o dataset, prepara as camadas de dados, demonstra o
-contrato, treina o modelo, simula 6 meses de produção e monitora o drift. Cada passo também pode ser
+`make all` roda o pipeline de ponta a ponta com observabilidade (`make pipeline`) e, em seguida, a
+demonstração do contrato. Ao final, abra `reports/monitoring/dashboard.html`. Cada passo também pode ser
 rodado isoladamente:
 
 | Comando | O que faz |
@@ -52,6 +52,8 @@ rodado isoladamente:
 | `make train` | Treina os modelos e registra no MLflow |
 | `make simulate` | Simula 6 meses de produção com drift crescente |
 | `make drift` | Monitora os meses: contrato, predição, drift, desempenho e alertas |
+| `make pipeline` | Executa tudo acima em uma única execução rastreada: log central, MLflow e dashboard |
+| `make dashboard` | Regera o dashboard a partir do log centralizado |
 | `make mlflow-ui` | Abre a interface do MLflow em http://127.0.0.1:5000 |
 | `make test` / `make lint` | Testes automatizados e verificação de estilo |
 
@@ -142,7 +144,7 @@ Etapa 4 consiga medir o efeito de cada um:
 | M2 | Início da inflação | Faturas +10% | 22,6% |
 | M3 | Inflação persistente | Faturas +20%; pagamentos não acompanham | 21,6% |
 | M4 | Novos perfis | Faturas +25%, limites +20%, 45% de clientes até 28 anos; **um parceiro envia um lote corrompido** | 22,4% |
-| M5 | Desemprego em alta | Tudo acima + 12% da carteira passa a atrasar e pagamentos caem 10% | 28,3% |
+| M5 | Desemprego em alta | Tudo acima + 12% da carteira passa a atrasar e pagamentos caem 10%; **o arquivo de um parceiro chega vazio** | 28,3% |
 | M6 | Crise | Efeitos intensificados + **concept drift**: clientes em dia, porém muito endividados, passam a inadimplir sem mudar nenhuma variável | 39,4% |
 
 Os rótulos seguem o mecanismo: inflação, limites e perfis mantêm o rótulo original (o risco real não
@@ -181,7 +183,7 @@ Cada variável recebe dois testes, que se complementam:
 | M2 | 1/23 (leve) | `bill_amt_1` | 0,020 | 0,763 | 23,0% | 22,6% | 1 |
 | M3 | 6/23 (leve) | `bill_amt_1..6` | 0,016 | 0,788 | 23,2% | 21,6% | 1 |
 | M4 | 8/23 | `age` (moderado) | 0,007 | 0,801 | 22,7% | 22,4% | 4 |
-| M5 | 20/23 | `pay_status_2` (significativo), `pay_status_1`, `pay_status_3`, `age` | 0,100 | 0,805 | 27,9% | 28,3% | 9 |
+| M5 | 20/23 | `pay_status_2` (significativo), `pay_status_1`, `pay_status_3`, `age` | 0,100 | 0,805 | 27,9% | 28,3% | 10 |
 | M6 | 18/23 | `pay_status_2`, `pay_amt_1`, `pay_status_1` (significativos) | 0,132 | **0,725** | 29,5% | **39,4%** | 12 |
 
 O que os resultados mostram:
@@ -193,7 +195,8 @@ O que os resultados mostram:
 4. **Concept drift degrada, e o score sozinho não mostra o tamanho do problema:** em M6 o AUC cai 0,053
    (alerta crítico) e o modelo **subestima o risco em 10 pontos** (29,5% previsto x 39,4% real).
 5. **O contrato continua atuando em produção:** o lote corrompido do parceiro em M4 é bloqueado e vai
-   para a quarentena, gerando alerta crítico de qualidade de dados.
+   para a quarentena, gerando alerta crítico de qualidade de dados. Em M5, o arquivo vazio do parceiro
+   também vai para a quarentena, com alerta crítico de pipeline, e o mês segue com o lote válido.
 
 ### Relatórios gerados (`reports/drift/`)
 
@@ -208,21 +211,166 @@ O que os resultados mostram:
 Os lotes mensais também geram relatório de validação do contrato em `reports/validation/` (incluindo
 `M4_parceiro.html`, o lote bloqueado).
 
+## Etapa 3 — Observabilidade de pipelines e modelos
+
+`make pipeline` executa tudo em uma única execução identificada por um `run_id`. Cada tarefa é medida, e
+todos os eventos vão para o mesmo lugar. A partir daí saem três visões da mesma execução:
+
+```mermaid
+flowchart LR
+    T[Tarefas do pipeline<br/>ingestão, transformação, treino,<br/>predição, desempenho, drift] --> L[(Log centralizado<br/>logs/pipeline.jsonl)]
+    A[Alertas<br/>dados, drift, desempenho, infraestrutura] --> L
+    L --> D[Dashboard HTML<br/>reports/monitoring/dashboard.html]
+    T --> M[(MLflow<br/>credit-scoring-monitoring)]
+    A --> M
+    L --> C[tasks.csv e run_log.jsonl]
+```
+
+### Log centralizado
+
+Todas as etapas escrevem em `logs/pipeline.jsonl`: uma linha JSON por evento, sempre com o `run_id`
+(`src/credit_monitoring/monitoring/logger.py`). Os resultados do monitoramento de drift vão para o mesmo
+arquivo que os logs de execução, então uma única consulta responde "o que aconteceu nesta execução?".
+
+| Evento | Quando | Campos principais |
+|---|---|---|
+| `run_started` / `run_finished` | Início e fim da execução | status, duração, tarefas, falhas, bloqueios, registros, pico de memória |
+| `task_finished` | Fim de cada tarefa | tarefa, mês, lote, status, duração, CPU, memória, registros de entrada, saída e rejeitados |
+| `baseline_referencia` | Carga do modelo | versão do modelo e métricas de referência |
+| `resumo_mensal` | Fim de cada mês | variáveis com drift, PSI, AUC, score médio, inadimplência real, alertas |
+| `alerta` | Cada alerta gerado | mês, categoria, severidade, valor e limiar |
+
+Exemplo (o lote corrompido do parceiro sendo barrado em M4):
+
+```json
+{"ts": "2026-11-15T00:39:51.681+00:00", "level": "WARNING", "run_id": "20261115T003939Z-9133",
+ "event": "task_finished", "task": "ingestao", "month": "M4", "batch": "M4_parceiro.csv",
+ "status": "bloqueado", "duration_seconds": 0.0822, "memory_rss_mb": 538.2,
+ "rows_in": 303, "rows_out": 0, "rows_rejected": 303,
+ "detail": "regras violadas: R1, R2, R3, R4, R5, R6, R7; 19 registro(s) com violação"}
+```
+
+- **Sem dados pessoais:** o log guarda só contagens, métricas e nomes de arquivos. Um teste automatizado
+  verifica que nenhum `client_id` aparece nele.
+- **Severidade do alerta vira nível do log:** crítico = `ERROR`, atenção = `WARNING`, informativo = `INFO`.
+- O arquivo `logs/` não é versionado; a cópia da última execução fica em
+  [`reports/monitoring/run_log.jsonl`](reports/monitoring/run_log.jsonl) (89 eventos).
+
+### Tarefas e tratamento de falhas
+
+Cada tarefa roda dentro de `track_task` (`monitoring/telemetry.py`), que mede duração, tempo de CPU e
+memória do processo (`psutil`) e registra o resultado com um de três status:
+
+| Status | Significado | O que o pipeline faz |
+|---|---|---|
+| `sucesso` | Tarefa concluída | Segue adiante |
+| `bloqueado` | O contrato de dados barrou o lote | Lote vai para a quarentena, alerta crítico de qualidade de dados, o mês segue com os lotes aprovados |
+| `falha` | Erro técnico (ex.: arquivo vazio ou ilegível) | Em lote de ingestão: quarentena, alerta crítico de pipeline e o mês segue. Em qualquer outra tarefa: a execução é interrompida, registrada como `falha`, e o dashboard é gerado mesmo assim |
+
+A simulação exercita os dois casos de ingestão: em M4 o parceiro envia dados inválidos (`bloqueado`) e em
+M5 envia um arquivo vazio (`falha`). Nos dois, nenhum dado inválido chega ao modelo.
+
+### Métricas de saúde operacional
+
+| Métrica | O que mede | Onde aparece | Gera alerta quando |
+|---|---|---|---|
+| Status da tarefa | Sucesso, bloqueio ou falha de cada tarefa, por mês | Grade de status do dashboard, `tasks.csv` | Uma falha fora da ingestão interrompe a execução, que fica registrada como `falha` |
+| Duração da tarefa | Latência de cada etapa, em segundos | Dashboard, MLflow (`duration_seconds`) | Passa de 60 s (`max_task_seconds`) |
+| Latência da predição | Milissegundos para pontuar 1.000 registros | Dashboard, MLflow (`prediction_seconds`) | — |
+| Registros recebidos, processados e rejeitados | Volume de dados por mês | Dashboard, MLflow (`rows_*`) | — (a rejeição já gera o alerta do lote, na linha abaixo) |
+| Lotes bloqueados e com falha | Incidentes de ingestão | Dashboard, MLflow (`blocked_batches`, `failed_batches`) | Qualquer ocorrência (crítico) |
+| Memória do processo | Uso de memória (RSS) ao fim de cada tarefa | Dashboard, MLflow (`memory_rss_mb`) | Passa de 2.048 MB (`max_memory_mb`) |
+| Tempo de CPU | Processamento consumido por tarefa | Tabela de infraestrutura do dashboard | — |
+| Variáveis com drift e PSI máximo | Mudança na distribuição dos dados | Dashboard, MLflow (`n_drifted`, `drift_share`, `psi_max`, `psi_<variável>`) | PSI ≥ 0,10 (atenção) ou ≥ 0,25 (crítico); 30% das variáveis com drift |
+| PSI do score | Mudança na distribuição das predições, antes de os rótulos chegarem | Dashboard, MLflow (`prediction_psi`) | PSI ≥ 0,10 |
+| AUC, KS e recall | Desempenho do modelo com os rótulos | Dashboard, MLflow | AUC cai 0,05 ou recall cai 0,10 em relação à referência |
+| Diferença de calibração | Inadimplência real menos score médio | Dashboard, MLflow (`calibration_gap`) | Diferença de 5 pontos percentuais |
+| Quantidade de alertas | Total e críticos, por mês e categoria | Dashboard, MLflow (`n_alerts`, `n_critical_alerts`) | — |
+
+Os limites ficam em `config/settings.yaml` (seções `observability` e `drift`).
+
+**O que fazer em cada alerta:**
+
+| Categoria | Ação recomendada |
+|---|---|
+| Qualidade de dados (lote bloqueado) | Abrir o relatório em `reports/validation/`, acionar a origem do lote e reprocessar após a correção. O arquivo original fica em `data/quarantine/` |
+| Pipeline (falha de ingestão) | Verificar a transferência do arquivo com a origem e solicitar o reenvio |
+| Data drift | Investigar a causa no relatório de drift. Se o desempenho se mantém, acompanhar; se o drift é significativo em variáveis importantes, antecipar a revisão do modelo |
+| Prediction drift | Sinal precoce, visível antes dos rótulos: reforçar o acompanhamento das decisões e antecipar a coleta de rótulos |
+| Desempenho | Retreinar o modelo com dados recentes e rever o limiar de decisão. Enquanto isso, adotar política de crédito mais conservadora |
+| Infraestrutura | Verificar volume de dados e recursos da máquina; ajustar os limites se o crescimento for esperado |
+
+### Dashboard de monitoramento
+
+[`reports/monitoring/dashboard.html`](reports/monitoring/dashboard.html) é um arquivo único que abre
+offline. Ele é montado só a partir do log centralizado e mostra a execução mais recente:
+
+- **Semáforo de saúde** em três frentes: pipeline de dados, infraestrutura e modelo.
+- **Saúde do pipeline:** status de cada tarefa em cada mês, incidentes, volume aprovado e rejeitado e
+  duração por etapa.
+- **Infraestrutura:** duração, CPU, memória e vazão por tarefa; memória e latência de predição por mês.
+- **Saúde do modelo:** AUC, calibração, variáveis com drift por severidade e PSI do score.
+- **Alertas** por mês, severidade e categoria, e **histórico das últimas execuções**.
+
+![Dashboard: semáforo de saúde, indicadores e status das tarefas por mês](docs/img/dashboard_pipeline.png)
+
+![Dashboard: saúde do modelo ao longo dos meses](docs/img/dashboard_model.png)
+
+Na execução versionada (`20261115T003939Z-9133`):
+
+| Indicador | Valor |
+|---|---|
+| Tarefas executadas | 32 (1 falha e 1 bloqueio, ambos de ingestão e tratados) |
+| Registros processados / rejeitados | 8.400 / 303 |
+| Duração da execução | 19,7 s (as duas anteriores levaram 19,1 s e 20,8 s) |
+| Tarefa mais lenta | Detecção de drift, 3,5 s (média de 2,3 s por mês) |
+| Latência da predição | 8 a 10 ms por 1.000 registros |
+| Pico de memória | 586 MB (limite de 2.048 MB) |
+| Alertas | 28, sendo 8 críticos |
+| Semáforo | Pipeline em atenção (incidentes tratados), infraestrutura saudável, **modelo crítico** em M6 |
+
+### Rastreamento no MLflow
+
+Cada execução também é registrada no experimento `credit-scoring-monitoring` (`monitoring/tracking.py`):
+
+- **Run pai** (`pipeline-<run_id>`): cada métrica é gravada com `step` igual ao número do mês, o que gera
+  na interface os gráficos de evolução abaixo.
+- **Runs filhos**, um por mês: métricas do mês, PSI de cada variável, relatório do Evidently e alertas
+  como artefatos.
+
+O treino continua no experimento `credit-scoring-training`, com o modelo campeão no Model Registry.
+Para explorar: `make mlflow-ui`. A telemetria de uso do MLflow fica desativada, então nada sai do ambiente.
+
+![MLflow: métricas do monitoramento por mês](docs/img/mlflow_monitoring.png)
+
+### Arquivos gerados (`reports/monitoring/`)
+
+| Arquivo | Conteúdo |
+|---|---|
+| [`dashboard.html`](reports/monitoring/dashboard.html) | Dashboard de monitoramento da última execução |
+| [`tasks.csv`](reports/monitoring/tasks.csv) | Métricas de cada tarefa: status, duração, CPU, memória e volumes |
+| [`run_log.jsonl`](reports/monitoring/run_log.jsonl) | Todos os eventos do log centralizado da execução |
+
 ## Estrutura
 
 ```
 ├── config/settings.yaml        # configuração central (caminhos, sementes, limites, modelo)
 ├── data/                       # raw (versionado) e camadas geradas
+├── docs/img/                   # capturas de tela usadas neste README
+├── logs/                       # log centralizado do pipeline (não versionado)
 ├── models/                     # metadados do modelo (o binário é gerado por make train)
 ├── reports/
 │   ├── validation/             # relatórios do contrato de dados (HTML + JSON)
-│   └── drift/                  # relatórios de drift (Evidently, consolidado, CSVs e alertas)
+│   ├── drift/                  # relatórios de drift (Evidently, consolidado, CSVs e alertas)
+│   └── monitoring/             # dashboard, métricas por tarefa e log da última execução
 ├── src/credit_monitoring/
 │   ├── data/                   # ingestão, limpeza, pseudonimização e separação
 │   ├── contracts/              # contrato Pandera, gate de ingestão e relatórios
 │   ├── models/                 # treino, métricas e artefato do modelo
 │   ├── drift/                  # simulação de produção, PSI/KS, monitoramento e relatório
-│   └── monitoring/             # integração com o MLflow
+│   ├── monitoring/             # log central, telemetria, alertas, MLflow e dashboard
+│   ├── pipeline.py             # orquestração de ponta a ponta com observabilidade
+│   └── reporting.py            # estilo e gráficos compartilhados pelos relatórios HTML
 ├── tests/                      # testes automatizados (pytest)
 ├── Makefile                    # atalhos de execução
 ├── requirements.txt            # dependências de execução (versões fixas)

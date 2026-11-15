@@ -45,6 +45,8 @@ paths:
   predictions_dir: data/production/predictions
   simulation_manifest: data/production/simulation_manifest.json
   drift_reports_dir: reports/drift
+  logs_file: logs/pipeline.jsonl
+  monitoring_reports_dir: reports/monitoring
 
 contract_demo:
   # Tamanho dos lotes de demonstração (válido e corrompido).
@@ -94,15 +96,18 @@ simulation:
       inflation: 0.25
       limit_expansion: 0.20
       young_share: 0.45
-      corrupted_partner_batch: true
+      partner_batch: corrompido
     - month: M5
       title: Desemprego em alta
-      narrative: 12% da carteira passa a atrasar e os pagamentos caem 10%.
+      narrative: >-
+        12% da carteira passa a atrasar e os pagamentos caem 10%.
+        O arquivo de um parceiro chega vazio (transferência interrompida).
       inflation: 0.30
       limit_expansion: 0.20
       young_share: 0.45
       payment_change: -0.10
       unemployment: 0.12
+      partner_batch: vazio
     - month: M6
       title: Crise
       narrative: >-
@@ -134,9 +139,17 @@ drift:
     # Diferença entre a inadimplência real e a média do score (descalibração).
     calibration_gap: 0.05
 
+observability:
+  # Limites operacionais: acima deles, a tarefa gera alerta de infraestrutura.
+  max_task_seconds: 60
+  max_memory_mb: 2048
+  # Quantas execuções anteriores aparecem no histórico do dashboard.
+  history_runs: 10
+
 mlflow:
   # Banco SQLite local (não versionado) e pasta de artefatos.
   tracking_db: mlflow.db
   artifact_dir: mlruns
   training_experiment: credit-scoring-training
+  monitoring_experiment: credit-scoring-monitoring
   registered_model: credit-scoring-model
