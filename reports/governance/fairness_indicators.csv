@@ -1,0 +1,5 @@
+attribute,groups_used,disparate_impact,equal_opportunity_gap,auc_gap,most_refused_group,passes_disparate_impact,passes_equal_opportunity
+sex,2,0.923711,0.0449197,0.019219,masculino,True,True
+age_band,3,0.925457,0.0495105,0.0283479,46 ou mais,True,True
+marriage,2,0.955681,0.0164292,0.0242455,casado(a),True,True
+education,3,0.858787,0.0800994,0.0349731,ensino médio,True,False

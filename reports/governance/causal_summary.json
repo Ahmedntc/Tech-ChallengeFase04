@@ -1,0 +1,19 @@
+{
+  "month": "M6",
+  "seeds": 20,
+  "simulations": 1280,
+  "baseline": {
+    "auc": 0.774088187714714,
+    "calibration_gap": 6.692555546760487e-05,
+    "mean_score": 0.2194330744445324,
+    "actual_default_rate": 0.21949999999999995,
+    "approval_rate": 0.7567142857142857
+  },
+  "full": {
+    "auc": 0.7167328007501307,
+    "calibration_gap": 0.10443302266086851,
+    "mean_score": 0.2980312630534172,
+    "actual_default_rate": 0.4024642857142857,
+    "approval_rate": 0.6227857142857143
+  }
+}

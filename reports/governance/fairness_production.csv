@@ -1,0 +1,9 @@
+window,n,attribute,disparate_impact,equal_opportunity_gap,auc_gap,most_refused_group
+Meses 1 a 3,4200,sex,0.911134,0.056409,0.000791234,masculino
+Meses 1 a 3,4200,age_band,0.852908,0.0839903,0.00899647,46 ou mais
+Meses 1 a 3,4200,marriage,0.950823,0.0165388,0.0185239,casado(a)
+Meses 1 a 3,4200,education,0.850306,0.0691252,0.0170628,ensino médio
+Meses 4 a 6,4200,sex,0.928056,0.0421909,0.0137886,masculino
+Meses 4 a 6,4200,age_band,0.901886,0.046946,0.028492,até 28
+Meses 4 a 6,4200,marriage,0.997795,0.0370896,0.0175339,solteiro(a)
+Meses 4 a 6,4200,education,0.875306,0.0599601,0.0151102,ensino médio
