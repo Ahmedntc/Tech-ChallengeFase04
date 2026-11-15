@@ -5,7 +5,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup data prepare contract-demo validate train mlflow-ui all lint format test clean
+.PHONY: help setup data prepare contract-demo validate train simulate drift mlflow-ui all lint format test clean
 
 help: ## Lista os comandos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -32,10 +32,16 @@ validate: ## Valida um lote qualquer: make validate BATCH=caminho/do/lote.csv
 train: ## Treina os modelos baseline e registra no MLflow
 	$(PY) -m credit_monitoring.models.train
 
+simulate: ## Simula 6 meses de produção com drift crescente
+	$(PY) -m credit_monitoring.drift.simulate
+
+drift: ## Monitora os meses simulados: contrato, predição, drift, desempenho e alertas
+	$(PY) -m credit_monitoring.drift.monitor
+
 mlflow-ui: ## Abre a interface do MLflow em http://127.0.0.1:5000
 	$(BIN)/mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
 
-all: data prepare contract-demo train ## Executa o pipeline completo
+all: data prepare contract-demo train simulate drift ## Executa o pipeline completo
 
 lint: ## Verifica estilo e erros com ruff
 	$(BIN)/ruff check src tests
