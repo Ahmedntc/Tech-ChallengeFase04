@@ -19,6 +19,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# Aviso interno do MLflow (uso do SQLAlchemy), fora do nosso controle.
+filterwarnings = ["ignore:The ``noload`` loader strategy is deprecated"]
 
 [tool.ruff]
 line-length = 100
@@ -32,3 +34,5 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 # Templates HTML/CSS embutidos: linhas longas são intencionais.
 "src/credit_monitoring/contracts/report.py" = ["E501"]
 "src/credit_monitoring/drift/report.py" = ["E501"]
+"src/credit_monitoring/reporting.py" = ["E501"]
+"src/credit_monitoring/monitoring/dashboard.py" = ["E501"]
