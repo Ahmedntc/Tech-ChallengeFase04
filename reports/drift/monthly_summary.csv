@@ -1,0 +1,7 @@
+month,title,n_rows,blocked_batches,n_drifted,drift_share,n_leve,n_moderado,n_significativo,psi_max,top_psi_features,prediction_psi,mean_score,actual_default_rate,approval_rate,auc,ks,recall,precision,n_alerts,n_critical_alerts
+M1,Estável (controle),1400,0,0,0,0,0,0,0.0201953,"pay_status_6, pay_status_5, bill_amt_4",0.00276272,0.218717,0.221429,0.760714,0.765626,0.434596,0.558065,0.516418,0,0
+M2,Início da inflação,1400,0,1,0.0434783,1,0,0,0.0350028,"bill_amt_1, pay_status_6, pay_amt_1",0.019867,0.230271,0.226429,0.738571,0.763148,0.401231,0.564669,0.489071,1,0
+M3,Inflação persistente,1400,0,6,0.26087,6,0,0,0.0417762,"bill_amt_1, bill_amt_2, bill_amt_3",0.0157131,0.232154,0.215714,0.744286,0.787615,0.439619,0.596026,0.502793,1,0
+M4,Novos perfis de clientes,1400,1,8,0.347826,7,1,0,0.135626,"age, bill_amt_1, limit_bal",0.00673853,0.226657,0.224286,0.75,0.801045,0.477918,0.601911,0.54,4,1
+M5,Desemprego em alta,1400,0,20,0.869565,14,5,1,0.295035,"pay_status_2, pay_status_3, age",0.100294,0.278518,0.282857,0.659286,0.804964,0.489154,0.686869,0.570231,9,1
+M6,Crise,1400,0,18,0.782609,11,4,3,0.414255,"pay_status_2, pay_amt_1, pay_status_1",0.131845,0.295003,0.394286,0.622857,0.724976,0.308911,0.554348,0.579545,12,5

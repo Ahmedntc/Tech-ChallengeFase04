@@ -1,0 +1,245 @@
+[
+  {
+    "month": "M2",
+    "category": "data drift",
+    "severity": "info",
+    "subject": "bill_amt_1",
+    "message": "Drift leve (detectado pelo KS, PSI < 0,10) em 1 variável(is): mudança estatisticamente significativa, ainda pequena.",
+    "value": null,
+    "threshold": null
+  },
+  {
+    "month": "M3",
+    "category": "data drift",
+    "severity": "info",
+    "subject": "bill_amt_1, bill_amt_2, bill_amt_3, bill_amt_4, bill_amt_5, bill_amt_6",
+    "message": "Drift leve (detectado pelo KS, PSI < 0,10) em 6 variável(is): mudança estatisticamente significativa, ainda pequena.",
+    "value": null,
+    "threshold": null
+  },
+  {
+    "month": "M4",
+    "category": "qualidade de dados",
+    "severity": "crítico",
+    "subject": "M4_parceiro.csv",
+    "message": "Lote bloqueado pelo contrato (regras R1, R2, R3, R4, R5, R6, R7) e enviado para a quarentena.",
+    "value": null,
+    "threshold": null
+  },
+  {
+    "month": "M4",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "age",
+    "message": "Drift moderado em age (PSI 0,136).",
+    "value": 0.1356,
+    "threshold": 0.1
+  },
+  {
+    "month": "M4",
+    "category": "data drift",
+    "severity": "info",
+    "subject": "limit_bal, bill_amt_1, bill_amt_2, bill_amt_3, bill_amt_4, bill_amt_5, bill_amt_6",
+    "message": "Drift leve (detectado pelo KS, PSI < 0,10) em 7 variável(is): mudança estatisticamente significativa, ainda pequena.",
+    "value": null,
+    "threshold": null
+  },
+  {
+    "month": "M4",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "dataset",
+    "message": "35% das variáveis com drift.",
+    "value": 0.3478,
+    "threshold": 0.3
+  },
+  {
+    "month": "M5",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "age",
+    "message": "Drift moderado em age (PSI 0,139).",
+    "value": 0.1386,
+    "threshold": 0.1
+  },
+  {
+    "month": "M5",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "pay_status_1",
+    "message": "Drift moderado em pay_status_1 (PSI 0,137).",
+    "value": 0.1371,
+    "threshold": 0.1
+  },
+  {
+    "month": "M5",
+    "category": "data drift",
+    "severity": "crítico",
+    "subject": "pay_status_2",
+    "message": "Drift significativo em pay_status_2 (PSI 0,295).",
+    "value": 0.295,
+    "threshold": 0.25
+  },
+  {
+    "month": "M5",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "pay_status_3",
+    "message": "Drift moderado em pay_status_3 (PSI 0,141).",
+    "value": 0.1412,
+    "threshold": 0.1
+  },
+  {
+    "month": "M5",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "pay_amt_1",
+    "message": "Drift moderado em pay_amt_1 (PSI 0,114).",
+    "value": 0.1144,
+    "threshold": 0.1
+  },
+  {
+    "month": "M5",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "pay_amt_5",
+    "message": "Drift moderado em pay_amt_5 (PSI 0,103).",
+    "value": 0.1035,
+    "threshold": 0.1
+  },
+  {
+    "month": "M5",
+    "category": "data drift",
+    "severity": "info",
+    "subject": "limit_bal, marriage, pay_status_4, pay_status_5, bill_amt_1, bill_amt_2, bill_amt_3, bill_amt_4, bill_amt_5, bill_amt_6, pay_amt_2, pay_amt_3, pay_amt_4, pay_amt_6",
+    "message": "Drift leve (detectado pelo KS, PSI < 0,10) em 14 variável(is): mudança estatisticamente significativa, ainda pequena.",
+    "value": null,
+    "threshold": null
+  },
+  {
+    "month": "M5",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "dataset",
+    "message": "87% das variáveis com drift.",
+    "value": 0.8696,
+    "threshold": 0.3
+  },
+  {
+    "month": "M5",
+    "category": "prediction drift",
+    "severity": "atenção",
+    "subject": "prediction",
+    "message": "Distribuição do score mudou (PSI 0,100).",
+    "value": 0.1003,
+    "threshold": 0.1
+  },
+  {
+    "month": "M6",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "age",
+    "message": "Drift moderado em age (PSI 0,215).",
+    "value": 0.2148,
+    "threshold": 0.1
+  },
+  {
+    "month": "M6",
+    "category": "data drift",
+    "severity": "crítico",
+    "subject": "pay_status_1",
+    "message": "Drift significativo em pay_status_1 (PSI 0,257).",
+    "value": 0.2572,
+    "threshold": 0.25
+  },
+  {
+    "month": "M6",
+    "category": "data drift",
+    "severity": "crítico",
+    "subject": "pay_status_2",
+    "message": "Drift significativo em pay_status_2 (PSI 0,414).",
+    "value": 0.4143,
+    "threshold": 0.25
+  },
+  {
+    "month": "M6",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "pay_status_3",
+    "message": "Drift moderado em pay_status_3 (PSI 0,234).",
+    "value": 0.2338,
+    "threshold": 0.1
+  },
+  {
+    "month": "M6",
+    "category": "data drift",
+    "severity": "crítico",
+    "subject": "pay_amt_1",
+    "message": "Drift significativo em pay_amt_1 (PSI 0,273).",
+    "value": 0.2734,
+    "threshold": 0.25
+  },
+  {
+    "month": "M6",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "pay_amt_2",
+    "message": "Drift moderado em pay_amt_2 (PSI 0,128).",
+    "value": 0.1277,
+    "threshold": 0.1
+  },
+  {
+    "month": "M6",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "pay_amt_4",
+    "message": "Drift moderado em pay_amt_4 (PSI 0,100).",
+    "value": 0.1,
+    "threshold": 0.1
+  },
+  {
+    "month": "M6",
+    "category": "data drift",
+    "severity": "info",
+    "subject": "limit_bal, marriage, bill_amt_1, bill_amt_2, bill_amt_3, bill_amt_4, bill_amt_5, bill_amt_6, pay_amt_3, pay_amt_5, pay_amt_6",
+    "message": "Drift leve (detectado pelo KS, PSI < 0,10) em 11 variável(is): mudança estatisticamente significativa, ainda pequena.",
+    "value": null,
+    "threshold": null
+  },
+  {
+    "month": "M6",
+    "category": "data drift",
+    "severity": "atenção",
+    "subject": "dataset",
+    "message": "78% das variáveis com drift.",
+    "value": 0.7826,
+    "threshold": 0.3
+  },
+  {
+    "month": "M6",
+    "category": "prediction drift",
+    "severity": "atenção",
+    "subject": "prediction",
+    "message": "Distribuição do score mudou (PSI 0,132).",
+    "value": 0.1318,
+    "threshold": 0.1
+  },
+  {
+    "month": "M6",
+    "category": "desempenho",
+    "severity": "crítico",
+    "subject": "auc",
+    "message": "AUC caiu 0,053 em relação à referência (0,778 → 0,725).",
+    "value": 0.0533,
+    "threshold": 0.05
+  },
+  {
+    "month": "M6",
+    "category": "desempenho",
+    "severity": "crítico",
+    "subject": "calibração",
+    "message": "O modelo subestima o risco: inadimplência real 39,4% x score médio 29,5%.",
+    "value": 0.0993,
+    "threshold": 0.05
+  }
+]

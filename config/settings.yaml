@@ -41,6 +41,10 @@ paths:
   validation_reports_dir: reports/validation
   model_file: models/credit_model.joblib
   model_metadata_file: models/model_metadata.json
+  labels_dir: data/production/labels
+  predictions_dir: data/production/predictions
+  simulation_manifest: data/production/simulation_manifest.json
+  drift_reports_dir: reports/drift
 
 contract_demo:
   # Tamanho dos lotes de demonstração (válido e corrompido).
@@ -60,6 +64,75 @@ model:
     subsample: 0.8
     colsample_bytree: 0.8
     min_child_weight: 5
+
+simulation:
+  # Registros por lote mensal, amostrados do Pool de Produção.
+  batch_size: 1400
+  # Idade máxima considerada "cliente jovem" no cenário de novos perfis.
+  young_age_max: 28
+  # Segmento do concept drift: clientes em dia, porém muito endividados.
+  concept_segment:
+    max_pay_status: 0
+    min_utilization: 0.6
+  months:
+    - month: M1
+      title: Estável (controle)
+      narrative: Nenhuma alteração. Serve para provar que o monitoramento não gera falso alarme.
+    - month: M2
+      title: Início da inflação
+      narrative: As faturas sobem 10%.
+      inflation: 0.10
+    - month: M3
+      title: Inflação persistente
+      narrative: As faturas sobem 20% e os pagamentos não acompanham.
+      inflation: 0.20
+    - month: M4
+      title: Novos perfis de clientes
+      narrative: >-
+        Expansão comercial: limites 20% maiores e 45% de clientes jovens no lote.
+        Um parceiro envia um lote corrompido, que deve ser barrado pelo contrato.
+      inflation: 0.25
+      limit_expansion: 0.20
+      young_share: 0.45
+      corrupted_partner_batch: true
+    - month: M5
+      title: Desemprego em alta
+      narrative: 12% da carteira passa a atrasar e os pagamentos caem 10%.
+      inflation: 0.30
+      limit_expansion: 0.20
+      young_share: 0.45
+      payment_change: -0.10
+      unemployment: 0.12
+    - month: M6
+      title: Crise
+      narrative: >-
+        Todos os efeitos se intensificam e clientes em dia, porém muito endividados,
+        passam a inadimplir sem mudar nenhuma feature (concept drift).
+      inflation: 0.40
+      limit_expansion: 0.25
+      young_share: 0.50
+      payment_change: -0.20
+      unemployment: 0.20
+      concept_drift: 0.45
+
+drift:
+  # Faixas do PSI: decis do conjunto de referência.
+  psi_bins: 10
+  # Limites clássicos de risco de crédito: < 0,10 estável, 0,10–0,25 moderado, > 0,25 significativo.
+  psi_moderate: 0.10
+  psi_significant: 0.25
+  # Nível de significância do KS. 0,01 (e não 0,05) controla o falso alarme com 23 testes por mês.
+  ks_alpha: 0.01
+  # Alerta quando esta fração das variáveis apresenta drift (qualquer severidade).
+  drift_share_alert: 0.30
+  # Alerta de drift nas predições (PSI do score).
+  prediction_psi_alert: 0.10
+  performance:
+    # Quedas em relação ao teste da Referência que disparam alerta.
+    auc_drop: 0.05
+    recall_drop: 0.10
+    # Diferença entre a inadimplência real e a média do score (descalibração).
+    calibration_gap: 0.05
 
 mlflow:
   # Banco SQLite local (não versionado) e pasta de artefatos.
