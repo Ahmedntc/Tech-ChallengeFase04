@@ -12,6 +12,9 @@ Para cada mês simulado:
    recall e calibração são comparados com o teste da Referência.
 6. **Alertas e relatórios:** relatório do Evidently por mês, tabelas e alertas.
 
+Cada passo é uma tarefa medida (``track_task``): status, duração, volume e memória vão
+para o log centralizado, junto com o resumo do mês e os alertas.
+
 A base de comparação é o **conjunto de teste da Referência**: mesma distribuição do
 treino, mas fora do ajuste do modelo, então seus scores não têm o viés otimista de
 dados de treino.
@@ -32,34 +35,22 @@ from typing import Any
 import pandas as pd
 
 from credit_monitoring.config import load_settings, resolve_path
-from credit_monitoring.contracts.gate import ingest_batch
+from credit_monitoring.contracts.gate import BatchReadError, ingest_batch
 from credit_monitoring.data.columns import FEATURES, ID_COLUMN, TARGET
 from credit_monitoring.drift.stats import drift_severity, psi
 from credit_monitoring.models.artifacts import ModelBundle
 from credit_monitoring.models.metrics import classification_metrics
 from credit_monitoring.models.train import split_reference
+from credit_monitoring.monitoring.alerts import Alert, br, log_alert
+from credit_monitoring.monitoring.logger import configure_logging, log_event
+from credit_monitoring.monitoring.telemetry import track_task
 
 logger = logging.getLogger(__name__)
 
 PREDICTION = "prediction"
 PREDICTION_LABEL = "prediction_label"
 SEVERITY_ORDER = ["estável", "leve", "moderado", "significativo"]
-
-
-def _br(value: float, spec: str) -> str:
-    """Formata números no padrão brasileiro (vírgula decimal) para as mensagens."""
-    return format(value, spec).replace(".", ",")
-
-
-@dataclass
-class Alert:
-    month: str
-    category: str
-    severity: str
-    subject: str
-    message: str
-    value: float | None = None
-    threshold: float | None = None
+STAGE = "monitoramento"
 
 
 @dataclass
@@ -88,6 +79,7 @@ class MonthResult:
             "title": self.title,
             "n_rows": self.n_rows,
             "blocked_batches": sum(b["status"] == "bloqueado" for b in self.batches),
+            "failed_batches": sum(b["status"] == "falha" for b in self.batches),
             "n_drifted": self.n_drifted,
             "drift_share": self.drift_share,
             **{f"n_{sev}": int(severities.get(sev, 0)) for sev in SEVERITY_ORDER[1:]},
@@ -215,6 +207,17 @@ def build_alerts(
                     "e enviado para a quarentena.",
                 )
             )
+        elif batch["status"] == "falha":
+            alerts.append(
+                Alert(
+                    month,
+                    "pipeline",
+                    "crítico",
+                    batch["file"],
+                    f"Falha na ingestão de {batch['file']}: {batch['error']}. "
+                    "Arquivo enviado para a quarentena.",
+                )
+            )
 
     for row in drift[drift["severity"].isin(["moderado", "significativo"])].itertuples():
         limit = cfg["psi_significant"] if row.severity == "significativo" else cfg["psi_moderate"]
@@ -224,7 +227,7 @@ def build_alerts(
                 "data drift",
                 "crítico" if row.severity == "significativo" else "atenção",
                 row.feature,
-                f"Drift {row.severity} em {row.feature} (PSI {_br(row.psi, '.3f')}).",
+                f"Drift {row.severity} em {row.feature} (PSI {br(row.psi, '.3f')}).",
                 round(row.psi, 4),
                 limit,
             )
@@ -237,7 +240,7 @@ def build_alerts(
                 "data drift",
                 "info",
                 ", ".join(mild),
-                f"Drift leve (detectado pelo KS, PSI < {_br(cfg['psi_moderate'], '.2f')}) "
+                f"Drift leve (detectado pelo KS, PSI < {br(cfg['psi_moderate'], '.2f')}) "
                 f"em {len(mild)} variável(is): mudança estatisticamente significativa, "
                 "ainda pequena.",
             )
@@ -249,7 +252,7 @@ def build_alerts(
                 "data drift",
                 "atenção",
                 "dataset",
-                f"{_br(drift_share, '.0%')} das variáveis com drift.",
+                f"{br(drift_share, '.0%')} das variáveis com drift.",
                 round(drift_share, 4),
                 cfg["drift_share_alert"],
             )
@@ -261,7 +264,7 @@ def build_alerts(
                 "prediction drift",
                 "crítico" if prediction_psi >= cfg["psi_significant"] else "atenção",
                 PREDICTION,
-                f"Distribuição do score mudou (PSI {_br(prediction_psi, '.3f')}).",
+                f"Distribuição do score mudou (PSI {br(prediction_psi, '.3f')}).",
                 round(prediction_psi, 4),
                 cfg["prediction_psi_alert"],
             )
@@ -276,8 +279,8 @@ def build_alerts(
                 "desempenho",
                 "crítico",
                 "auc",
-                f"AUC caiu {_br(auc_drop, '.3f')} em relação à referência "
-                f"({_br(baseline_metrics['auc'], '.3f')} → {_br(performance['auc'], '.3f')}).",
+                f"AUC caiu {br(auc_drop, '.3f')} em relação à referência "
+                f"({br(baseline_metrics['auc'], '.3f')} → {br(performance['auc'], '.3f')}).",
                 round(auc_drop, 4),
                 perf["auc_drop"],
             )
@@ -290,7 +293,7 @@ def build_alerts(
                 "desempenho",
                 "atenção",
                 "recall",
-                f"Recall caiu {_br(recall_drop, '.3f')}: o modelo deixa passar mais inadimplentes.",
+                f"Recall caiu {br(recall_drop, '.3f')}: o modelo deixa passar mais inadimplentes.",
                 round(recall_drop, 4),
                 perf["recall_drop"],
             )
@@ -305,13 +308,55 @@ def build_alerts(
                 "crítico" if gap > 0 else "atenção",
                 "calibração",
                 f"O modelo {direction} o risco: inadimplência real "
-                f"{_br(performance['actual_default_rate'], '.1%')} x "
-                f"score médio {_br(mean_score, '.1%')}.",
+                f"{br(performance['actual_default_rate'], '.1%')} x "
+                f"score médio {br(mean_score, '.1%')}.",
                 round(gap, 4),
                 perf["calibration_gap"],
             )
         )
     return alerts
+
+
+def ingest_month(
+    month_info: dict[str, Any], settings: dict[str, Any]
+) -> tuple[list[dict[str, Any]], list[pd.DataFrame]]:
+    """Passa cada lote do mês pelo gate. Devolve o resultado por lote e os dados aprovados.
+
+    Um lote bloqueado ou ilegível não interrompe o mês: fica registrado e o
+    processamento segue com os lotes aprovados.
+    """
+    month = month_info["month"]
+    incoming = resolve_path(settings["paths"]["incoming_dir"])
+    batches, accepted = [], []
+    for name in month_info["files"]:
+        batch: dict[str, Any] = {
+            "file": name,
+            "status": "aprovado",
+            "n_rows": 0,
+            "violated_rules": [],
+            "error": None,
+        }
+        try:
+            with track_task("ingestao", stage=STAGE, month=month, batch=name) as task:
+                result = ingest_batch(incoming / name, settings)
+                task.rows_in = batch["n_rows"] = result.n_rows
+                if result.passed:
+                    task.rows_out = result.n_rows
+                    accepted.append(result.data)
+                else:
+                    task.status = batch["status"] = "bloqueado"
+                    task.rows_out = 0
+                    task.rows_rejected = result.n_rows
+                    batch["violated_rules"] = result.violated_rules
+                    task.detail = (
+                        f"regras violadas: {', '.join(result.violated_rules)}; "
+                        f"{result.n_rows_with_violations} registro(s) com violação"
+                    )
+        except BatchReadError as exc:
+            batch["status"] = "falha"
+            batch["error"] = str(exc)
+        batches.append(batch)
+    return batches, accepted
 
 
 def monitor_month(
@@ -323,49 +368,42 @@ def monitor_month(
     paths = settings["paths"]
     cfg = settings["drift"]
     month = month_info["month"]
-    incoming = resolve_path(paths["incoming_dir"])
 
-    batches, accepted = [], []
-    for name in month_info["files"]:
-        result = ingest_batch(incoming / name, settings)
-        batches.append(
-            {
-                "file": name,
-                "status": "aprovado" if result.passed else "bloqueado",
-                "n_rows": result.n_rows,
-                "violated_rules": result.violated_rules,
-            }
-        )
-        if result.passed:
-            accepted.append(result.data)
+    batches, accepted = ingest_month(month_info, settings)
     if not accepted:
         raise RuntimeError(f"Nenhum lote aprovado em {month}.")
 
-    current = pd.concat(accepted, ignore_index=True)
-    scores = bundle.predict_proba(current)
-    current = current.assign(
-        **{PREDICTION: scores, PREDICTION_LABEL: (scores >= bundle.threshold).astype(int)}
-    )
-    predictions_dir = resolve_path(paths["predictions_dir"])
-    predictions_dir.mkdir(parents=True, exist_ok=True)
-    current[[ID_COLUMN, PREDICTION, PREDICTION_LABEL]].assign(
-        month=month, model_version=bundle.version
-    ).to_parquet(predictions_dir / f"{month}.parquet", index=False)
+    with track_task("predicao", stage=STAGE, month=month) as task:
+        current = pd.concat(accepted, ignore_index=True)
+        scores = bundle.predict_proba(current)
+        current = current.assign(
+            **{PREDICTION: scores, PREDICTION_LABEL: (scores >= bundle.threshold).astype(int)}
+        )
+        predictions_dir = resolve_path(paths["predictions_dir"])
+        predictions_dir.mkdir(parents=True, exist_ok=True)
+        current[[ID_COLUMN, PREDICTION, PREDICTION_LABEL]].assign(
+            month=month, model_version=bundle.version
+        ).to_parquet(predictions_dir / f"{month}.parquet", index=False)
+        task.rows_in = task.rows_out = n_scored = len(current)
 
-    # Os rótulos chegam depois; o desempenho é medido nos clientes já rotulados.
-    labels = pd.read_parquet(resolve_path(paths["labels_dir"]) / f"{month}.parquet")
-    current = current.merge(labels, on=ID_COLUMN, how="inner")
+    with track_task("avaliacao_desempenho", stage=STAGE, month=month) as task:
+        # Os rótulos chegam depois; o desempenho é medido nos clientes já rotulados.
+        labels = pd.read_parquet(resolve_path(paths["labels_dir"]) / f"{month}.parquet")
+        current = current.merge(labels, on=ID_COLUMN, how="inner")
+        performance = classification_metrics(current[TARGET], current[PREDICTION], bundle.threshold)
+        mean_score = float(current[PREDICTION].mean())
+        task.rows_in, task.rows_out = n_scored, len(current)
 
-    reports_dir = resolve_path(paths["drift_reports_dir"])
-    html_path = reports_dir / f"evidently_{month}.html"
-    ks_pvalues = run_evidently(current, baseline.data, cfg["ks_alpha"], html_path)
+    with track_task("deteccao_drift", stage=STAGE, month=month) as task:
+        html_path = resolve_path(paths["drift_reports_dir"]) / f"evidently_{month}.html"
+        ks_pvalues = run_evidently(current, baseline.data, cfg["ks_alpha"], html_path)
+        drift = feature_drift_table(current, baseline.data, ks_pvalues, bundle.features, cfg)
+        n_drifted = int((drift["severity"] != "estável").sum())
+        drift_share = n_drifted / len(drift)
+        prediction_psi = psi(baseline.data[PREDICTION], current[PREDICTION], cfg["psi_bins"])
+        task.rows_in = task.rows_out = len(current)
+        task.detail = f"{n_drifted} de {len(drift)} variáveis com drift"
 
-    drift = feature_drift_table(current, baseline.data, ks_pvalues, bundle.features, cfg)
-    n_drifted = int((drift["severity"] != "estável").sum())
-    drift_share = n_drifted / len(drift)
-    prediction_psi = psi(baseline.data[PREDICTION], current[PREDICTION], cfg["psi_bins"])
-    performance = classification_metrics(current[TARGET], current[PREDICTION], bundle.threshold)
-    mean_score = float(current[PREDICTION].mean())
     alerts = build_alerts(
         month,
         batches,
@@ -377,19 +415,12 @@ def monitor_month(
         baseline.metrics,
         cfg,
     )
-    logger.info(
-        "%s: %d variáveis com drift, AUC %.3f, %d alertas",
-        month,
-        n_drifted,
-        performance["auc"],
-        len(alerts),
-    )
-    return MonthResult(
+    result = MonthResult(
         month=month,
         title=month_info["title"],
         narrative=month_info.get("narrative", ""),
         batches=batches,
-        n_rows=int(sum(len(df) for df in accepted)),
+        n_rows=n_scored,
         feature_drift=drift,
         n_drifted=n_drifted,
         drift_share=drift_share,
@@ -401,6 +432,17 @@ def monitor_month(
         alerts=alerts,
         evidently_report=html_path.name,
     )
+    for alert in alerts:
+        log_alert(logger, alert)
+    log_event(
+        logger,
+        logging.INFO,
+        "resumo_mensal",
+        f"{month}: {n_drifted} variáveis com drift, AUC {performance['auc']:.3f}, "
+        f"{len(alerts)} alertas",
+        **result.summary_row(),
+    )
+    return result
 
 
 def save_outputs(results: list[MonthResult], baseline: Baseline, settings: dict[str, Any]) -> Path:
@@ -434,15 +476,27 @@ def run_monitoring(settings: dict[str, Any] | None = None) -> list[MonthResult]:
     paths = settings["paths"]
     bundle = ModelBundle.load(resolve_path(paths["model_file"]))
     baseline = build_baseline(settings, bundle)
+    log_event(
+        logger,
+        logging.INFO,
+        "baseline_referencia",
+        f"Modelo {bundle.version}: AUC de referência {baseline.metrics['auc']:.3f}.",
+        model_version=bundle.version,
+        auc=baseline.metrics["auc"],
+        ks=baseline.metrics["ks"],
+        recall=baseline.metrics["recall"],
+        threshold=bundle.threshold,
+    )
     manifest = json.loads(resolve_path(paths["simulation_manifest"]).read_text(encoding="utf-8"))
     results = [monitor_month(m, bundle, baseline, settings) for m in manifest["months"]]
-    save_outputs(results, baseline, settings)
+    with track_task("gerar_relatorios", stage=STAGE):
+        save_outputs(results, baseline, settings)
     return results
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     settings = load_settings()
+    configure_logging(settings)
     results = run_monitoring(settings)
 
     print(

@@ -6,7 +6,7 @@ import pytest
 
 from credit_monitoring.data.columns import FEATURES
 from credit_monitoring.data.prepare import split_reference_production
-from credit_monitoring.drift.monitor import build_alerts, run_monitoring
+from credit_monitoring.drift.monitor import build_alerts, ingest_month, run_monitoring
 from credit_monitoring.drift.simulate import simulate
 from credit_monitoring.models.train import train
 
@@ -56,6 +56,20 @@ def test_blocked_batch_raises_critical_data_quality_alert(base_settings):
     assert "R1, R3" in alert.message
 
 
+def test_unreadable_batch_raises_critical_pipeline_alert(base_settings):
+    batches = [
+        {
+            "file": "M5_parceiro.csv",
+            "status": "falha",
+            "violated_rules": [],
+            "error": "arquivo vazio (0 byte)",
+        }
+    ]
+    (alert,) = _alerts(base_settings, batches=batches)
+    assert (alert.category, alert.severity) == ("pipeline", "crítico")
+    assert "arquivo vazio" in alert.message
+
+
 def test_feature_drift_alerts_follow_severity(base_settings):
     drift = _drift(pay_status_1="significativo", age="moderado", bill_amt_1="leve")
     alerts = _alerts(base_settings, drift=drift, drift_share=3 / 23)
@@ -79,12 +93,6 @@ def test_performance_drop_and_underestimated_risk_are_critical(base_settings):
 def small_world(settings, prepared_df, tmp_path):
     """Pipeline completo em escala reduzida: referência, pool, modelo e 2 meses."""
     cfg = copy.deepcopy(settings)
-    cfg["paths"].update(
-        labels_dir=str(tmp_path / "labels"),
-        predictions_dir=str(tmp_path / "predictions"),
-        simulation_manifest=str(tmp_path / "manifest.json"),
-        drift_reports_dir=str(tmp_path / "drift"),
-    )
     cfg["model"]["xgboost"]["n_estimators"] = 50
     cfg["simulation"]["batch_size"] = 800
     months = cfg["simulation"]["months"]
@@ -108,10 +116,30 @@ def test_monitoring_end_to_end_flags_the_crisis_and_not_the_control(small_world)
     assert crisis.performance["actual_default_rate"] > crisis.mean_score + 0.05
     assert any(a.category == "desempenho" for a in crisis.alerts)
 
-    drift_dir = tmp_path / "drift"
+    drift_dir = tmp_path / "reports" / "drift"
     for name in ("drift_report.html", "feature_drift.csv", "monthly_summary.csv", "alerts.json"):
         assert (drift_dir / name).exists()
     assert (drift_dir / f"evidently_{control.month}.html").exists()
     alerts = json.loads((drift_dir / "alerts.json").read_text(encoding="utf-8"))
     assert len(alerts) == len(control.alerts) + len(crisis.alerts)
     assert (tmp_path / "predictions" / f"{crisis.month}.parquet").exists()
+
+
+def test_month_ingestion_survives_blocked_and_unreadable_batches(settings, valid_batch, tmp_path):
+    incoming = tmp_path / "incoming"
+    incoming.mkdir()
+    valid_batch.to_csv(incoming / "M9.csv", index=False)
+    invalid = valid_batch.copy()
+    invalid.loc[0, "age"] = 10
+    invalid.to_csv(incoming / "M9_invalido.csv", index=False)
+    (incoming / "M9_vazio.csv").write_bytes(b"")
+    month = {"month": "M9", "files": ["M9.csv", "M9_invalido.csv", "M9_vazio.csv"]}
+
+    batches, accepted = ingest_month(month, settings)
+
+    assert [b["status"] for b in batches] == ["aprovado", "bloqueado", "falha"]
+    assert batches[1]["violated_rules"] == ["R3"]
+    assert "arquivo vazio" in batches[2]["error"]
+    assert len(accepted) == 1 and len(accepted[0]) == len(valid_batch)
+    quarantined = sorted(p.name.split("_", 1)[1] for p in (tmp_path / "quarantine").iterdir())
+    assert quarantined == ["M9_invalido.csv", "M9_vazio.csv"]
