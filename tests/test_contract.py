@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from credit_monitoring.contracts.corrupt import make_corrupted_batch
-from credit_monitoring.contracts.gate import ingest_batch, validate_batch
+from credit_monitoring.contracts.gate import BatchReadError, ingest_batch, validate_batch
 from credit_monitoring.contracts.schema import LIMIT_BAL_MAX
 from credit_monitoring.data.columns import ID_COLUMN, TARGET
 
@@ -121,9 +121,10 @@ def test_ingest_quarantines_blocked_batch_and_writes_reports(settings, valid_bat
     assert not result.passed
     quarantined = list((tmp_path / "quarantine").glob("*_lote_ruim.csv"))
     assert len(quarantined) == 1
-    report = json.loads((tmp_path / "reports" / "lote_ruim.json").read_text(encoding="utf-8"))
+    reports = tmp_path / "reports" / "validation"
+    report = json.loads((reports / "lote_ruim.json").read_text(encoding="utf-8"))
     assert report["status"] == "bloqueado"
-    assert (tmp_path / "reports" / "lote_ruim.html").exists()
+    assert (reports / "lote_ruim.html").exists()
 
 
 def test_ingest_accepts_valid_csv_without_quarantine(settings, valid_batch, tmp_path):
@@ -135,3 +136,20 @@ def test_ingest_accepts_valid_csv_without_quarantine(settings, valid_batch, tmp_
     assert result.passed
     assert not (tmp_path / "quarantine").exists()
     assert result.data[ID_COLUMN].equals(valid_batch[ID_COLUMN])
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [(b"", "arquivo vazio"), (b"\xff\xfe\x00binario", "arquivo ilegível")],
+    ids=["vazio", "nao_e_csv"],
+)
+def test_unreadable_file_is_quarantined_and_reported_as_read_error(
+    settings, tmp_path, content, expected
+):
+    path = tmp_path / "lote_quebrado.csv"
+    path.write_bytes(content)
+
+    with pytest.raises(BatchReadError, match=expected):
+        ingest_batch(path, settings)
+
+    assert len(list((tmp_path / "quarantine").glob("*_lote_quebrado.csv"))) == 1

@@ -8,7 +8,6 @@ Uso: ``python -m credit_monitoring.contracts.demo``
 
 from __future__ import annotations
 
-import logging
 import sys
 from typing import Any
 
@@ -18,6 +17,7 @@ from credit_monitoring.config import load_settings, resolve_path
 from credit_monitoring.contracts.corrupt import make_corrupted_batch
 from credit_monitoring.contracts.gate import format_summary, ingest_batch
 from credit_monitoring.data.columns import TARGET
+from credit_monitoring.monitoring.logger import configure_logging
 
 VALID_BATCH = "lote_valido"
 CORRUPTED_BATCH = "lote_corrompido"
@@ -42,7 +42,7 @@ def build_demo_batches(settings: dict[str, Any]) -> dict[str, str]:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    configure_logging()
     settings = load_settings()
     manifest = build_demo_batches(settings)
     incoming = resolve_path(settings["paths"]["incoming_dir"])

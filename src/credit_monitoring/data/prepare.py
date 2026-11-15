@@ -27,6 +27,7 @@ from credit_monitoring.config import load_settings, resolve_path
 from credit_monitoring.contracts.gate import format_summary, validate_batch
 from credit_monitoring.data.columns import ID_COLUMN, MONETARY, RAW_COLUMN_MAP, TARGET
 from credit_monitoring.data.download import ensure_raw_dataset
+from credit_monitoring.monitoring.logger import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,7 @@ def prepare(settings: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    configure_logging()
     summary = prepare()
     cleaning = summary["cleaning"]
     print("Limpeza do dado bruto:")

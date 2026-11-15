@@ -27,6 +27,7 @@ from credit_monitoring.config import load_settings, resolve_path
 from credit_monitoring.contracts.report import write_reports
 from credit_monitoring.contracts.schema import RULES, build_contract, build_warning_checks
 from credit_monitoring.data.columns import ID_COLUMN
+from credit_monitoring.monitoring.logger import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +193,10 @@ def validate_batch(df: pd.DataFrame, batch_name: str, labeled: bool = False) -> 
     )
 
 
+class BatchReadError(Exception):
+    """O arquivo do lote não pôde ser lido (vazio, truncado, formato inválido...)."""
+
+
 def read_batch(path: Path) -> pd.DataFrame:
     """Lê um lote recebido (CSV ou Parquet). O client_id é sempre lido como texto."""
     if path.suffix == ".parquet":
@@ -201,22 +206,48 @@ def read_batch(path: Path) -> pd.DataFrame:
     raise ValueError(f"Formato de lote não suportado: {path.suffix}")
 
 
+def load_batch(path: Path) -> pd.DataFrame:
+    """Lê o lote e traduz qualquer problema de leitura em ``BatchReadError``."""
+    try:
+        if path.stat().st_size == 0:
+            raise BatchReadError("arquivo vazio (0 byte)")
+        return read_batch(path)
+    except (OSError, ValueError) as exc:  # inclui os erros de leitura do pandas e do pyarrow
+        raise BatchReadError(f"arquivo ilegível ({type(exc).__name__}: {exc})") from exc
+
+
+def quarantine(path: Path, settings: dict[str, Any]) -> Path:
+    """Copia o arquivo para a quarentena, com o instante no nome."""
+    quarantine_dir = resolve_path(settings["paths"]["quarantine_dir"])
+    quarantine_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    destination = quarantine_dir / f"{stamp}_{path.name}"
+    shutil.copy2(path, destination)
+    return destination
+
+
 def ingest_batch(
     path: Path, settings: dict[str, Any] | None = None, labeled: bool = False
 ) -> ValidationResult:
-    """Valida um arquivo de lote, grava os relatórios e coloca em quarentena se reprovado."""
+    """Valida um arquivo de lote, grava os relatórios e coloca em quarentena se reprovado.
+
+    Um arquivo ilegível também vai para a quarentena e levanta ``BatchReadError``.
+    """
     settings = settings or load_settings()
     paths = settings["paths"]
-    result = validate_batch(read_batch(path), path.stem, labeled)
+    try:
+        batch = load_batch(path)
+    except BatchReadError as exc:
+        quarantine(path, settings)
+        logger.error("Lote %s REJEITADO: %s; enviado para quarentena.", path.name, exc)
+        raise
+    result = validate_batch(batch, path.stem, labeled)
     write_reports(result, resolve_path(paths["validation_reports_dir"]))
 
     if result.passed:
         logger.info("Lote %s aprovado (%d registros).", result.batch_name, result.n_rows)
     else:
-        quarantine_dir = resolve_path(paths["quarantine_dir"])
-        quarantine_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        shutil.copy2(path, quarantine_dir / f"{stamp}_{path.name}")
+        quarantine(path, settings)
         logger.error(
             "Lote %s BLOQUEADO: regras violadas %s; enviado para quarentena.",
             result.batch_name,
@@ -247,8 +278,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--labeled", action="store_true", help="O lote contém o alvo (default)")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    result = ingest_batch(args.batch, labeled=args.labeled)
+    settings = load_settings()
+    configure_logging(settings)
+    try:
+        result = ingest_batch(args.batch, settings, labeled=args.labeled)
+    except BatchReadError as exc:
+        print(f"Lote: {args.batch.name} -> BLOQUEADO ({exc})")
+        return 1
     print(format_summary(result))
     return 0 if result.passed else 1
 
