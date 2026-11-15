@@ -22,8 +22,8 @@ O pipeline confere a **impressão digital do conteúdo** (SHA-256 do CSV canôni
 |---|---|---|
 | `raw/` | Planilha original da UCI, imutável | sim |
 | `reference/` | Dataset de Referência, o único usado no treino | não (gerado) |
-| `production/` | Pool de Produção e lotes mensais simulados onde o drift acontece | não (gerado) |
-| `incoming/` | Área de entrada: lotes recebidos aguardando o gate de ingestão | não (gerado) |
+| `production/` | Pool de Produção, rótulos (`labels/`), predições (`predictions/`) e manifesto da simulação | não (gerado) |
+| `incoming/` | Área de entrada: lotes recebidos (demonstração e meses M1–M6) aguardando o gate de ingestão | não (gerado) |
 | `quarantine/` | Lotes rejeitados pelo contrato de dados | não (gerado) |
 
 As camadas geradas usam nomes de colunas padronizados (`limit_bal`, `age`, `pay_status_1..6`,
