@@ -1,0 +1,5 @@
+variant,excluded,auc,approval_rate,di_sex,eo_sex,di_age_band,eo_age_band,di_marriage,eo_marriage,di_education,eo_education,auc_std
+Em produção (sem sexo e estado civil),"sex, marriage",0.778541,0.755264,0.928568,0.0427342,0.930968,0.043037,0.953624,0.0166918,0.871225,0.0662422,0.00127165
+Com todos os atributos,nenhum,0.781728,0.754549,0.908777,0.060764,0.928012,0.046032,0.948319,0.0209992,0.869167,0.0673459,0.00055637
+Sem escolaridade,"sex, marriage, education",0.778321,0.756933,0.924893,0.0450694,0.925301,0.0530303,0.950926,0.0208447,0.86909,0.0721854,0.00165762
+Sem escolaridade e idade,"sex, marriage, education, age",0.778765,0.757251,0.930126,0.041846,0.957783,0.0192142,0.977239,0.000913589,0.886564,0.0539022,0.000184346

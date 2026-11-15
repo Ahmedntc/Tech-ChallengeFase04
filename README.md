@@ -19,7 +19,7 @@ Este projeto constrói a camada de sustentação e confiabilidade desse modelo:
 | 1 | Validação de dados e contratos + modelo baseline | concluída |
 | 2 | Simulação e detecção de drift | concluída |
 | 3 | Observabilidade de pipelines e modelos | concluída |
-| 4 | Governança, LGPD e causalidade | pendente |
+| 4 | Governança, LGPD e causalidade | concluída |
 | 5 | Entrega final (README consolidado, CI, vídeo) | pendente |
 
 ## Dataset
@@ -39,9 +39,9 @@ make setup
 make all
 ```
 
-`make all` roda o pipeline de ponta a ponta com observabilidade (`make pipeline`) e, em seguida, a
-demonstração do contrato. Ao final, abra `reports/monitoring/dashboard.html`. Cada passo também pode ser
-rodado isoladamente:
+`make all` roda o pipeline de ponta a ponta com observabilidade (`make pipeline`), a demonstração do
+contrato e a análise de governança (`make governance`). Ao final, abra `reports/monitoring/dashboard.html` e
+`reports/governance/governance_report.html`. Cada passo também pode ser rodado isoladamente:
 
 | Comando | O que faz |
 |---|---|
@@ -54,6 +54,9 @@ rodado isoladamente:
 | `make drift` | Monitora os meses: contrato, predição, drift, desempenho e alertas |
 | `make pipeline` | Executa tudo acima em uma única execução rastreada: log central, MLflow e dashboard |
 | `make dashboard` | Regera o dashboard a partir do log centralizado |
+| `make governance` | Análise causal, equidade, explicabilidade e privacidade |
+| `make explain BATCH=lote.csv CLIENT=id` | Explica a decisão de crédito de um cliente |
+| `make retention` | Lista os arquivos com prazo de retenção vencido (`APPLY=1` apaga) |
 | `make mlflow-ui` | Abre a interface do MLflow em http://127.0.0.1:5000 |
 | `make test` / `make lint` | Testes automatizados e verificação de estilo |
 
@@ -243,9 +246,9 @@ arquivo que os logs de execução, então uma única consulta responde "o que ac
 Exemplo (o lote corrompido do parceiro sendo barrado em M4):
 
 ```json
-{"ts": "2026-11-15T00:39:51.681+00:00", "level": "WARNING", "run_id": "20261115T003939Z-9133",
+{"ts": "2026-11-15T15:20:06.295+00:00", "level": "WARNING", "run_id": "20261115T151952Z-6d6d",
  "event": "task_finished", "task": "ingestao", "month": "M4", "batch": "M4_parceiro.csv",
- "status": "bloqueado", "duration_seconds": 0.0822, "memory_rss_mb": 538.2,
+ "status": "bloqueado", "duration_seconds": 0.1011, "memory_rss_mb": 523.8,
  "rows_in": 303, "rows_out": 0, "rows_rejected": 303,
  "detail": "regras violadas: R1, R2, R3, R4, R5, R6, R7; 19 registro(s) com violação"}
 ```
@@ -316,16 +319,16 @@ offline. Ele é montado só a partir do log centralizado e mostra a execução m
 
 ![Dashboard: saúde do modelo ao longo dos meses](docs/img/dashboard_model.png)
 
-Na execução versionada (`20261115T003939Z-9133`):
+Na execução versionada (`20261115T151952Z-6d6d`):
 
 | Indicador | Valor |
 |---|---|
 | Tarefas executadas | 32 (1 falha e 1 bloqueio, ambos de ingestão e tratados) |
 | Registros processados / rejeitados | 8.400 / 303 |
-| Duração da execução | 19,7 s (as duas anteriores levaram 19,1 s e 20,8 s) |
-| Tarefa mais lenta | Detecção de drift, 3,5 s (média de 2,3 s por mês) |
-| Latência da predição | 8 a 10 ms por 1.000 registros |
-| Pico de memória | 586 MB (limite de 2.048 MB) |
+| Duração da execução | 20,8 s (as duas anteriores levaram 20,0 s e 24,4 s) |
+| Tarefa mais lenta | Detecção de drift, 4,0 s (média de 2,5 s por mês) |
+| Latência da predição | 7 a 11 ms por 1.000 registros |
+| Pico de memória | 593 MB (limite de 2.048 MB) |
 | Alertas | 28, sendo 8 críticos |
 | Semáforo | Pipeline em atenção (incidentes tratados), infraestrutura saudável, **modelo crítico** em M6 |
 
@@ -351,6 +354,319 @@ Para explorar: `make mlflow-ui`. A telemetria de uso do MLflow fica desativada, 
 | [`tasks.csv`](reports/monitoring/tasks.csv) | Métricas de cada tarefa: status, duração, CPU, memória e volumes |
 | [`run_log.jsonl`](reports/monitoring/run_log.jsonl) | Todos os eventos do log centralizado da execução |
 
+## Etapa 4 — Governança, LGPD e causalidade
+
+`make governance` gera o [relatório de governança](reports/governance/governance_report.html) e as tabelas que
+sustentam esta seção (`reports/governance/`). Ele responde quatro perguntas: **por que** o modelo degradou,
+se ele trata os grupos de clientes de forma **equilibrada**, como **explicar** cada decisão e qual o **risco
+de privacidade** dos dados.
+
+> As referências legais abaixo foram levantadas para fins acadêmicos. Numa instituição real, a definição
+> final cabe ao jurídico e ao encarregado de dados (DPO).
+
+### Plano de proteção de dados (LGPD)
+
+#### Inventário de dados
+
+O projeto usa um dataset público de pesquisa (UCI) como substituto dos dados da fintech. O plano descreve
+como o pipeline trata esses dados e como os trataria em produção.
+
+| Dado | Colunas | Classificação | No modelo? | Tratamento |
+|---|---|---|---|---|
+| Identificador | `ID` → `client_id` | Dado pessoal (identificador) | Não | Pseudonimizado na ingestão (HMAC-SHA256); a chave fica fora do repositório |
+| Sexo e estado civil | `sex`, `marriage` | Dados pessoais com potencial discriminatório | **Não** | Mantidos só para a auditoria de equidade |
+| Idade | `age` | Dado pessoal com potencial discriminatório | Sim | Auditado; retirada recomendada no próximo retreino |
+| Escolaridade | `education` | Dado pessoal; pode funcionar como indicador de origem social | Sim | Auditado; retirada recomendada no próximo retreino |
+| Limite, faturas e pagamentos | `limit_bal`, `bill_amt_*`, `pay_amt_*` | Dados financeiros pessoais | Sim | — |
+| Histórico de pagamento | `pay_status_*` | Informação de adimplemento (Cadastro Positivo) | Sim | — |
+| Inadimplência | `default` | Resultado da relação de crédito | Rótulo | Chega meses depois; mede o desempenho |
+
+- **Nenhum dado pessoal sensível** (art. 5º, II: origem racial ou étnica, religião, opinião política, saúde,
+  vida sexual, dado genético ou biométrico) é coletado. Sexo e estado civil não são sensíveis pela lei, mas
+  podem levar a decisões discriminatórias, por isso ficam fora do modelo.
+- O contrato de dados (regra R1) **bloqueia qualquer coluna não prevista**: um CPF enviado por engano por um
+  sistema de origem não chega ao modelo nem aos dados de treino.
+
+#### Base legal
+
+| Tratamento | Base legal |
+|---|---|
+| Análise da proposta e decisão de crédito | **Art. 7º, X: proteção do crédito.** Complementada pelo art. 7º, V (procedimentos preliminares a um contrato, a pedido do titular) |
+| Treino e monitoramento do modelo | Mesma finalidade, compatível com a original (art. 6º, I e II: finalidade e adequação), com dados pseudonimizados |
+| Guarda de registros após o encerramento | Art. 7º, II (obrigação legal ou regulatória) e VI (exercício regular de direitos em processo) |
+| Histórico de pagamento | Lei do Cadastro Positivo (Lei 12.414/2011), que proíbe anotar informações excessivas, não ligadas à análise de risco, e sensíveis (art. 3º, §3º) |
+
+O **consentimento** (art. 7º, I) não é usado como base: ele pode ser revogado a qualquer momento e não combina
+com uma avaliação de risco necessária para conceder o crédito.
+
+#### Decisões automatizadas e direitos do titular
+
+O art. 20 garante ao titular o direito de pedir a **revisão de decisões tomadas unicamente por tratamento
+automatizado**, inclusive as que definem seu perfil de crédito, e de receber informações claras sobre os
+critérios usados (§1º), preservados os segredos comercial e industrial.
+
+O projeto atende a esse direito com uma explicação **exata** de cada decisão: o XGBoost decompõe o score na
+contribuição de cada variável (valores SHAP), e a soma dessas contribuições reproduz o score.
+
+```bash
+make explain BATCH=data/incoming/M6.csv CLIENT=4816c7d6d98b1ea0
+```
+
+```
+Decisão: RECUSADO (score 91,8%, limiar 27,5%)
+
+Principais motivos que aumentaram o risco:
+  1. Situação do pagamento no último mês: atraso de 3 meses
+  2. Valor da fatura no último mês: NT$ 270.960
+  3. Situação do pagamento há 2 meses: atraso de 2 meses
+```
+
+(O `client_id` depende da chave de pseudonimização de cada ambiente; use um identificador do seu
+`data/incoming/M6.csv`.)
+
+**Procedimento de revisão:** o titular faz o pedido → o atendimento localiza o `client_id` (só o controlador,
+com a chave, liga o titular ao pseudônimo) → `make explain` gera a explicação → um analista revisa a decisão →
+o titular recebe os principais motivos. O texto vigente do art. 20 não exige que a revisão seja feita por uma
+pessoa; o projeto adota a revisão humana como boa prática e usa como referência o prazo de 15 dias do art. 19,
+II. Os demais direitos do art. 18 (acesso, correção, eliminação etc.) seguem o mesmo caminho de
+identificação.
+
+#### Privacy by Design e by Default
+
+| Princípio | Como está implementado | Onde |
+|---|---|---|
+| Pseudonimização desde a entrada | HMAC-SHA256 com chave em variável de ambiente ou `.secrets/`, nunca no repositório | `data/prepare.py` |
+| Minimização (art. 6º, III) | Sexo e estado civil fora do modelo; colunas não previstas são bloqueadas | `config/settings.yaml`, `contracts/schema.py` |
+| Não discriminação (art. 6º, IX) | Auditoria de equidade a cada execução de `make governance` | `governance/fairness.py` |
+| Logs sem dados pessoais | Só contagens, métricas e nomes de arquivos; um teste automatizado garante | `monitoring/logger.py` |
+| Retenção por padrão | Prazo por pasta; `make retention` lista os vencidos e `APPLY=1` apaga | `governance/privacy.py` |
+| Transparência (art. 6º, VI) | Motivos de cada decisão em linguagem simples | `governance/explain.py` |
+| Segurança (art. 46) | Segredos e camadas de dados fora do controle de versão; quarentena isola lotes inválidos; telemetria do MLflow desligada | `.gitignore`, `contracts/gate.py` |
+
+#### Risco de reidentificação
+
+Pseudonimizar não é anonimizar: quem tem a chave volta ao titular, e uma combinação de atributos comuns
+também pode identificar alguém. Um registro é *k-anônimo* quando pelo menos k clientes compartilham a mesma
+combinação de atributos (dataset de Referência, 20.975 clientes):
+
+| Atributos combinados | Combinações distintas | Registros com k < 5 | Registros únicos |
+|---|---|---|---|
+| idade, sexo, escolaridade, estado civil | 810 | 3,2% | 0,8% |
+| + limite de crédito | 8.779 | 61,1% | **22,6%** |
+
+Com o limite de crédito, quase 1 em cada 4 clientes fica único. Por isso os dados pseudonimizados continuam
+sendo **dados pessoais** e recebem a mesma proteção. Os relatórios publicados mostram apenas números
+agregados; os relatórios de validação trazem alguns `client_id` pseudonimizados como exemplos e, em
+produção, devem ter acesso restrito.
+
+#### Plano de retenção
+
+| Dado | Prazo | Fundamento | Ao final |
+|---|---|---|---|
+| Proposta e decisão (variáveis, score, motivos, versão do modelo) | 5 anos após a decisão | Defesa em pedidos de revisão e processos (art. 7º, VI); auditoria do modelo | Eliminação |
+| Contrato e histórico de pagamento do cliente | Contrato + 5 anos | Registros de operações (Lei 9.613/1998, art. 10, §2º); prazo de cobrança (Código Civil, art. 206, §5º, I) | Eliminação ou anonimização (LGPD, art. 16) |
+| Informação negativa em cadastro de consumo | Até 5 anos | Código de Defesa do Consumidor, art. 43, §1º | Exclusão |
+| Informação de adimplemento | Até 15 anos | Lei 12.414/2011, art. 14 | Exclusão |
+| Dataset de treino (Referência) | Enquanto o modelo estiver em uso + 5 anos | Reprodutibilidade e auditoria do modelo | Eliminação |
+| Predições e rótulos de produção | 5 anos (`1825` dias) | Auditoria e monitoramento | Eliminação automática |
+| Lotes recebidos | 30 dias | Tempo de processamento | Eliminação automática |
+| Lotes em quarentena | 90 dias | Tempo para corrigir na origem e reprocessar | Eliminação automática |
+| Logs operacionais | 1 ano | Sem dados pessoais | Eliminação automática |
+| Chave de pseudonimização | Mesmo prazo dos dados que protege | — | Destruição junto com os dados |
+| Métricas agregadas (MLflow, relatórios) | Indeterminado | Não são dados pessoais | — |
+
+Os prazos automáticos ficam em `config/settings.yaml` (seção `governance.retention`) e são aplicados por
+`make retention`, que por padrão só lista e registra a verificação no log central.
+
+#### Relatório de impacto (RIPD, art. 38) — resumo
+
+| Risco | Mitigação no projeto | Risco residual |
+|---|---|---|
+| Discriminação de grupos | Sexo e estado civil fora do modelo; auditoria de equidade; recomendação de retirar idade e escolaridade | Diferença por escolaridade acima do limite (plano de ação abaixo) |
+| Decisões erradas por degradação do modelo | Monitoramento de drift, desempenho e calibração com alertas; análise causal; plano de retreino | Concept drift só aparece quando os rótulos chegam |
+| Reidentificação | Pseudonimização, relatórios agregados, acesso restrito | 22,6% de registros únicos com o limite: tratar como dado pessoal |
+| Coleta indevida (ex.: CPF vazado) | Regra R1 do contrato bloqueia colunas não previstas | Baixo |
+| Dados inválidos chegando ao modelo | Contrato de dados com quarentena | Baixo |
+| Falta de transparência | Explicação de cada decisão | Baixo |
+| Guarda além do necessário | Prazos de retenção aplicados automaticamente | Baixo |
+
+### Mitigação de vieses
+
+**Como medir.** No conjunto de teste da Referência e com o limiar do modelo em produção, cada atributo é
+avaliado por dois indicadores:
+
+- **Impacto desproporcional:** menor taxa de aprovação entre os grupos ÷ maior. Referência usual: regra dos
+  4/5 (≥ 0,80).
+- **Diferença de recusa indevida (igualdade de oportunidade):** entre os clientes que **pagaram em dia**,
+  quantos o modelo recusou, comparando os grupos. Bons pagadores devem ter a mesma chance de aprovação.
+  Limite adotado: 5 pontos percentuais.
+
+Grupos com menos de 100 clientes ficam fora dos indicadores, por instabilidade estatística.
+
+| Atributo | Impacto desproporcional | Diferença de recusa indevida | Grupo mais recusado |
+|---|---|---|---|
+| Sexo | 0,92 ✔ | 4,5 p.p. ✔ | masculino |
+| Faixa etária | 0,93 ✔ | 5,0 p.p. ✔ (no limite) | 46 anos ou mais |
+| Estado civil | 0,96 ✔ | 1,6 p.p. ✔ | casado(a) |
+| Escolaridade | 0,86 ✔ | **8,0 p.p. ▲** | ensino médio |
+
+**Mitigação testada.** Variantes do modelo, cada uma treinada com 3 sementes e comparada com a **mesma taxa
+de aprovação** (75,5%). Sem isso, uma variante com limiar mais permissivo pareceria mais justa só por recusar
+menos gente.
+
+| Variante | AUC | Recusa indevida: sexo | idade | escolaridade |
+|---|---|---|---|---|
+| **Em produção** (sem sexo e estado civil) | 0,7785 | 4,3 p.p. | 4,3 p.p. | 6,6 p.p. |
+| Com todos os atributos | 0,7817 | **6,1 p.p.** | 4,6 p.p. | 6,7 p.p. |
+| Sem escolaridade | 0,7783 | 4,5 p.p. | 5,3 p.p. | 7,2 p.p. |
+| Sem escolaridade e idade | 0,7788 | 4,2 p.p. | **1,9 p.p.** | **5,4 p.p.** |
+
+O que os números mostram:
+
+1. **Excluir sexo e estado civil foi a decisão certa.** Incluí-los ganharia só 0,003 de AUC e levaria a
+   diferença por sexo de 4,3 para 6,1 p.p., acima do limite.
+2. **Esconder um atributo não basta.** Retirar só a escolaridade não reduz a diferença por escolaridade
+   (6,6 → 7,2 p.p.): ela vem de variáveis correlacionadas, como limite e histórico.
+3. **Retirar idade e escolaridade melhora a equidade sem custo de desempenho.** Mesmo AUC (0,7788 contra
+   0,7785), diferença por idade de 4,3 para 1,9 p.p. e por escolaridade de 6,6 para 5,4 p.p.
+
+**Decisão.** A troca de variáveis do modelo em produção passa por aprovação e muda a base do monitoramento,
+então ela fica registrada para o **próximo retreino**: retirar idade e escolaridade. Como a diferença por
+escolaridade continua perto do limite (5,4 p.p.), o retreino deve testar também a reponderação das amostras
+de treino por grupo, e a auditoria continua a cada ciclo.
+
+**Equidade em produção.** Com as decisões dos meses simulados, agregadas em janelas de 3 meses:
+
+| Atributo | Referência | Meses 1 a 3 | Meses 4 a 6 | Oscilação por acaso em 3 meses | Oscilação por acaso em 1 mês |
+|---|---|---|---|---|---|
+| Sexo | 4,5 p.p. | 5,6 p.p. | 4,2 p.p. | ± 1,8 p.p. | ± 3,0 p.p. |
+| Faixa etária | 5,0 p.p. | 8,4 p.p. | 4,7 p.p. | ± 2,1 p.p. | ± 3,9 p.p. |
+| Estado civil | 1,6 p.p. | 1,7 p.p. | 3,7 p.p. | ± 1,2 p.p. | ± 1,6 p.p. |
+| Escolaridade | 8,0 p.p. | 6,9 p.p. | 6,0 p.p. | ± 2,7 p.p. | ± 5,0 p.p. |
+
+A oscilação por acaso foi medida sorteando 30 lotes sem nenhum drift. Num mês de 1.400 clientes, a diferença
+oscila até ±5 p.p. só por amostragem, o mesmo tamanho do limite. Por isso a **equidade deve ser acompanhada em
+janelas de pelo menos 3 meses**. Nas janelas de produção, a disparidade estrutural mais relevante continua
+sendo a escolaridade; na crise (meses 4 a 6), os clientes **até 28 anos** passam a ser o grupo de idade mais
+recusado entre os bons pagadores.
+
+### Análise causal da degradação
+
+#### Hipóteses causais
+
+```mermaid
+flowchart LR
+    E[Choque econômico] --> I[Inflação]
+    E --> D[Desemprego]
+    C[Política comercial] --> L[Limites maiores]
+    C --> J[Mais clientes jovens]
+    I --> F[Faturas maiores]
+    I --> P[Renda real e<br/>pagamentos menores]
+    D --> A[Novos atrasos]
+    D --> P
+    F --> U[Endividamento<br/>fatura ÷ limite]
+    L --> U
+    U --> CD[Concept drift: endividados em dia<br/>passam a inadimplir]
+    A --> Y[Inadimplência real]
+    CD --> Y
+    F & P & A & L & J --> S[Score do modelo]
+    S --> G{Score x realidade}
+    Y --> G
+    G --> Q[Degradação: AUC menor<br/>e risco subestimado]
+```
+
+O modelo só enxerga as variáveis; a inadimplência depende também de um risco que não aparece nelas (o
+concept drift). A degradação é a distância entre o que o score prevê e o que acontece.
+
+#### Método: intervenção
+
+O monitoramento mostra **correlações**: no mês da crise, muitas variáveis mudaram e o desempenho caiu. Ele
+não diz qual mudança **causou** a queda. Como a simulação é controlada, é possível **intervir**: cada um dos 6
+mecanismos do cenário M6 foi ligado e desligado em todas as 64 combinações, com 20 sementes cada (1.280
+simulações), mantendo todo o resto igual.
+
+O efeito de cada mecanismo é o seu **valor de Shapley**: a média do efeito de ligá-lo em todas as combinações
+dos outros. Assim as interações são divididas de forma justa e a soma dos efeitos é exatamente a mudança total
+(propriedade verificada nos testes).
+
+#### Resultados
+
+Sem nenhum mecanismo, o AUC é 0,774 e o modelo está calibrado; com todos, o AUC cai para 0,717 e a
+inadimplência real fica 10,4 p.p. acima do score médio.
+
+| Mecanismo | Efeito no AUC | Efeito em real − score | Efeito no score médio | Efeito na inadimplência real |
+|---|---|---|---|---|
+| Inflação nas faturas | −0,004 | +0,2 p.p. | +0,9 p.p. | +1,1 p.p. |
+| Queda nos pagamentos | +0,002 | −0,7 p.p. | +0,7 p.p. | 0,0 p.p. |
+| Expansão dos limites | +0,007 | −0,1 p.p. | −0,6 p.p. | −0,7 p.p. |
+| Mais clientes jovens | −0,007 | −0,1 p.p. | +0,5 p.p. | +0,4 p.p. |
+| Desemprego (novos atrasos) | +0,030 | +2,1 p.p. | +6,3 p.p. | +8,3 p.p. |
+| **Concept drift** | **−0,086** | **+9,1 p.p.** | 0,0 p.p. | +9,1 p.p. |
+| **Total** | −0,057 | +10,4 p.p. | +7,9 p.p. | +18,3 p.p. |
+
+| Bloco | Efeito no AUC | Parcela da descalibração |
+|---|---|---|
+| Data drift (5 mecanismos) | **+0,031** ± 0,008 | 13% |
+| Concept drift | **−0,088** ± 0,003 | **87%** |
+
+![Relatório de governança: análise causal](docs/img/governance_causal.png)
+
+#### Interpretação
+
+1. **A causa da degradação é o concept drift.** Ele explica toda a queda de AUC e 87% da descalibração. É uma
+   mudança na relação entre as variáveis e a inadimplência, invisível nas variáveis: o modelo não tem como
+   percebê-la, e só os rótulos revelam o problema.
+2. **O maior drift não é o culpado.** As variáveis com maior PSI em M6 (`pay_status_2`, `pay_amt_1`,
+   `pay_status_1`) mudaram por causa do desemprego, que **melhorou** o AUC (+0,030): clientes com atrasos novos
+   são fáceis de identificar, e o score subiu junto com o risco (+6,3 p.p. contra +8,3 p.p.). Ordenar variáveis
+   pelo drift não identifica a causa da degradação.
+3. **Interações importam.** A inflação não muda nenhum rótulo diretamente, mas aumenta a inadimplência real em
+   1,1 p.p.: faturas maiores elevam o endividamento e colocam mais clientes no segmento atingido pelo concept
+   drift. A expansão de limites faz o contrário (−0,7 p.p.).
+
+**Limitações.** Em produção não existe o cenário "sem a crise" para comparar, e esta análise só é possível
+porque a simulação é controlada. Na prática, a investigação usa calibração por segmento, testes com dados
+históricos (backtesting) e experimentos naturais, apoiados por um grafo causal explícito como o acima.
+
+#### Prescrição
+
+Metade do Pool de Produção simula a crise já observada (com rótulos) e a outra metade, a crise que continua.
+Média de 5 repetições:
+
+| Resposta | AUC | Real − score | Recall | Precisão | Aprovação |
+|---|---|---|---|---|---|
+| Manter o modelo | 0,723 | 10,9 p.p. | 56,5% | 60,7% | 61,9% |
+| Recalibrar o score | 0,723 | 0,2 p.p. | 90,3% | 48,6% | 23,9% |
+| **Retreinar com dados recentes** | **0,762** | 3,7 p.p. | 64,9% | 62,4% | 57,3% |
+
+Plano de ação:
+
+1. **Retreinar** com os dados recentes rotulados, com peso maior para eles: recupera 0,038 de AUC e reduz a
+   descalibração de 10,9 para 3,7 p.p.
+2. **Recalibrar só como medida de emergência**, para estimar perdas e precificar. Recalibrar não melhora a
+   ordenação (o AUC é o mesmo) e, com o limiar ajustado na crise, a aprovação cairia para 24%: o limiar de
+   decisão é uma política de negócio, não um ajuste automático.
+3. **Criar uma variável de comprometimento** (fatura ÷ limite): o concept drift atinge justamente clientes em
+   dia e muito endividados, combinação que o modelo atual só capta de forma indireta.
+4. **Encurtar o atraso dos rótulos** com indicadores precoces (por exemplo, 30 dias de atraso) e acompanhar a
+   **calibração por segmento**, já que o concept drift não aparece nas variáveis.
+5. **Gatilho de retreino:** alerta crítico de desempenho (queda de AUC de 0,05 ou descalibração de 5 p.p.).
+   Data drift sem queda de desempenho pede acompanhamento, não retreino imediato.
+
+### Arquivos gerados (`reports/governance/`)
+
+| Arquivo | Conteúdo |
+|---|---|
+| [`governance_report.html`](reports/governance/governance_report.html) | Relatório completo: causalidade, prescrição, equidade, explicabilidade e privacidade |
+| `causal_by_mechanism.csv`, `causal_by_group.csv`, `causal_summary.json` | Efeito de cada mecanismo e de cada bloco, com erro padrão |
+| `retraining.csv` | Comparação entre manter, recalibrar e retreinar |
+| `fairness_indicators.csv`, `fairness_groups.csv` | Indicadores de equidade e métricas por grupo |
+| `fairness_variants.csv` | Variantes do modelo testadas como mitigação |
+| `fairness_production.csv`, `fairness_sampling_noise.csv` | Equidade em produção e oscilação por acaso |
+| `feature_importance.csv`, `reason_codes_examples.csv` | Importância das variáveis e exemplos de motivos de recusa |
+| `reidentification_risk.csv` | k-anonimato por combinação de atributos |
+
+
 ## Estrutura
 
 ```
@@ -362,12 +678,14 @@ Para explorar: `make mlflow-ui`. A telemetria de uso do MLflow fica desativada, 
 ├── reports/
 │   ├── validation/             # relatórios do contrato de dados (HTML + JSON)
 │   ├── drift/                  # relatórios de drift (Evidently, consolidado, CSVs e alertas)
-│   └── monitoring/             # dashboard, métricas por tarefa e log da última execução
+│   ├── monitoring/             # dashboard, métricas por tarefa e log da última execução
+│   └── governance/             # relatório de governança e tabelas (causalidade, equidade, privacidade)
 ├── src/credit_monitoring/
 │   ├── data/                   # ingestão, limpeza, pseudonimização e separação
 │   ├── contracts/              # contrato Pandera, gate de ingestão e relatórios
 │   ├── models/                 # treino, métricas e artefato do modelo
 │   ├── drift/                  # simulação de produção, PSI/KS, monitoramento e relatório
+│   ├── governance/             # explicabilidade, equidade, análise causal, privacidade e retenção
 │   ├── monitoring/             # log central, telemetria, alertas, MLflow e dashboard
 │   ├── pipeline.py             # orquestração de ponta a ponta com observabilidade
 │   └── reporting.py            # estilo e gráficos compartilhados pelos relatórios HTML

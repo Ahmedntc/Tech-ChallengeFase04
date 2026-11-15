@@ -6,7 +6,7 @@ PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
 .PHONY: help setup data prepare contract-demo validate train simulate drift pipeline dashboard \
-	mlflow-ui all lint format test clean
+	governance explain retention mlflow-ui all lint format test clean
 
 help: ## Lista os comandos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -45,10 +45,20 @@ pipeline: ## Executa tudo de ponta a ponta com observabilidade (log central, MLf
 dashboard: ## Regera o dashboard a partir do log centralizado
 	$(PY) -m credit_monitoring.monitoring.dashboard
 
+governance: ## Análise causal, equidade, explicabilidade e privacidade (relatório de governança)
+	$(PY) -m credit_monitoring.governance.report
+
+explain: ## Explica a decisão de um cliente: make explain BATCH=lote.csv CLIENT=<client_id>
+	@test -n "$(BATCH)" -a -n "$(CLIENT)" || (echo "Uso: make explain BATCH=data/incoming/M6.csv CLIENT=<client_id>" && exit 2)
+	$(PY) -m credit_monitoring.governance.explain $(BATCH) $(CLIENT)
+
+retention: ## Lista os arquivos com prazo de retenção vencido (APPLY=1 para apagar)
+	$(PY) -m credit_monitoring.governance.privacy $(if $(APPLY),--apply,)
+
 mlflow-ui: ## Abre a interface do MLflow em http://127.0.0.1:5000
 	MLFLOW_DISABLE_TELEMETRY=true $(BIN)/mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
 
-all: pipeline contract-demo ## Pipeline completo + demonstração do contrato
+all: pipeline contract-demo governance ## Pipeline completo + demonstração do contrato + governança
 
 lint: ## Verifica estilo e erros com ruff
 	$(BIN)/ruff check src tests

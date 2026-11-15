@@ -32,7 +32,9 @@ def isolated_settings(base: dict, tmp: Path) -> dict:
         drift_reports_dir=str(tmp / "reports" / "drift"),
         logs_file=str(tmp / "logs" / "pipeline.jsonl"),
         monitoring_reports_dir=str(tmp / "reports" / "monitoring"),
+        governance_reports_dir=str(tmp / "reports" / "governance"),
     )
+    cfg["governance"]["retention"] = {str(tmp / "quarantine"): 90}
     cfg["pseudonymization"]["key_file"] = str(tmp / ".secrets" / "key")
     cfg["mlflow"].update(tracking_db=str(tmp / "mlflow.db"), artifact_dir=str(tmp / "mlruns"))
     return cfg
