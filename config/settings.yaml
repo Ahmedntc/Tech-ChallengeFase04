@@ -47,6 +47,7 @@ paths:
   drift_reports_dir: reports/drift
   logs_file: logs/pipeline.jsonl
   monitoring_reports_dir: reports/monitoring
+  governance_reports_dir: reports/governance
 
 contract_demo:
   # Tamanho dos lotes de demonstração (válido e corrompido).
@@ -145,6 +146,51 @@ observability:
   max_memory_mb: 2048
   # Quantas execuções anteriores aparecem no histórico do dashboard.
   history_runs: 10
+
+governance:
+  fairness:
+    # Atributos avaliados (age_band = faixa etária, criada a partir da idade).
+    attributes: [sex, age_band, marriage, education]
+    age_bands: [28, 45]
+    # Grupos menores que isso aparecem nas tabelas, mas ficam fora dos indicadores.
+    min_group_size: 100
+    # Regra dos 4/5: menor taxa de aprovação / maior taxa de aprovação.
+    disparate_impact_min: 0.80
+    # Diferença máxima de recusa indevida (bons pagadores recusados) entre grupos.
+    equal_opportunity_max_gap: 0.05
+    # Variantes do modelo testadas como mitigação: atributos excluídos de cada uma.
+    variants:
+      Em produção (sem sexo e estado civil): [sex, marriage]
+      Com todos os atributos: []
+      Sem escolaridade: [sex, marriage, education]
+      Sem escolaridade e idade: [sex, marriage, education, age]
+    seeds: [42, 7, 2026]
+    # Janelas de produção para acompanhar a equidade. Um mês só (1.400 clientes) tem
+    # grupos pequenos demais: a diferença varia vários pontos apenas por amostragem.
+    production_windows:
+      Meses 1 a 3: [M1, M2, M3]
+      Meses 4 a 6: [M4, M5, M6]
+  causal:
+    # Mês analisado e quantas sementes simular para cada combinação de mecanismos.
+    month: M6
+    seeds: 20
+    first_seed: 100
+  retraining:
+    repetitions: 5
+    # Peso dos dados recentes (crise observada) em relação à Referência no retreino.
+    recent_weight: 3.0
+  privacy:
+    quasi_identifiers: [age, sex, education, marriage]
+    # Atributos somados um a um aos quase-identificadores, para medir o risco crescente.
+    extra_identifiers: [limit_bal]
+    k_min: 5
+  # Prazo de retenção, em dias, de cada pasta (aplicado por `make retention`).
+  retention:
+    data/incoming: 30
+    data/quarantine: 90
+    data/production/predictions: 1825
+    data/production/labels: 1825
+    logs: 365
 
 mlflow:
   # Banco SQLite local (não versionado) e pasta de artefatos.
