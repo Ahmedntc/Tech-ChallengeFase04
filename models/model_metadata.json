@@ -1,7 +1,7 @@
 {
   "model_name": "credit-scoring-model",
-  "version": "v20261106194543",
-  "trained_at": "2026-11-06T19:45:43+00:00",
+  "version": "v20261115003941",
+  "trained_at": "2026-11-15T00:39:41+00:00",
   "champion": "xgboost",
   "selection_criterion": "maior AUC na validação",
   "threshold": 0.27507951855659485,
@@ -126,6 +126,6 @@
   "mlflow": {
     "experiment": "credit-scoring-training",
     "registered_model": "credit-scoring-model",
-    "registered_version": 1
+    "registered_version": 3
   }
 }

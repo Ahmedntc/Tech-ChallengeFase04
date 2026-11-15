@@ -1,6 +1,6 @@
 {
   "batch_name": "lote_corrompido",
-  "validated_at": "2026-11-06T19:45:41+00:00",
+  "validated_at": "2026-11-15T00:40:01+00:00",
   "status": "bloqueado",
   "n_rows": 503,
   "n_rows_with_violations": 19,
@@ -195,19 +195,19 @@
         {
           "indice": 500,
           "coluna": "client_id",
-          "valor": "5402b192c4053174",
+          "valor": "6f9c8cb4479de242",
           "checagem": "R7_registro_duplicado"
         },
         {
           "indice": 501,
           "coluna": "client_id",
-          "valor": "78ee76bfac47975f",
+          "valor": "8759b6a565cdd5a5",
           "checagem": "R7_registro_duplicado"
         },
         {
           "indice": 502,
           "coluna": "client_id",
-          "valor": "92f4863bed65728e",
+          "valor": "315bbed2ce619abd",
           "checagem": "R7_registro_duplicado"
         }
       ]
