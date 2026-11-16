@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "credit-monitoring"
-version = "0.1.0"
+version = "1.0.0"
 description = "Camada de sustentação e confiabilidade de um modelo de Credit Scoring: contratos de dados, detecção de drift, observabilidade e governança."
 readme = "README.md"
 requires-python = ">=3.12"

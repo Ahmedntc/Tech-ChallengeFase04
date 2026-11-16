@@ -1,5 +1,7 @@
 # Tech Challenge Fase 4 — Sustentação e Confiabilidade de um Modelo de Credit Scoring
 
+[![CI](https://github.com/Ahmedntc/Tech-ChallengeFase04/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahmedntc/Tech-ChallengeFase04/actions/workflows/ci.yml)
+
 > **Tema:** Observabilidade Contínua, Detecção de Drift, Qualidade de Dados e Governança em Produção
 
 Uma fintech de crédito tem um modelo de *Credit Scoring* em produção. Com mudanças recentes na economia
@@ -11,21 +13,72 @@ Este projeto constrói a camada de sustentação e confiabilidade desse modelo:
 3. **Observabilidade** do pipeline, da infraestrutura e do modelo (logs estruturados, MLflow, dashboard).
 4. **Governança e LGPD**, com análise causal da degradação.
 
-## Status
+**Vídeo de apresentação (STAR, até 5 minutos):** _link a ser adicionado_ ·
+[roteiro do vídeo](docs/roteiro_video.md)
 
-| Etapa | Descrição | Status |
+## Sumário
+
+- [Resultados em um minuto](#resultados-em-um-minuto)
+- [Arquitetura](#arquitetura)
+- [Como executar](#como-executar)
+- [Atendimento aos requisitos](#atendimento-aos-requisitos)
+- [Dataset](#dataset)
+- [Etapa 1 — Validação de dados e contratos](#etapa-1--validação-de-dados-e-contratos)
+- [Etapa 2 — Simulação e detecção de drift](#etapa-2--simulação-e-detecção-de-drift)
+- [Etapa 3 — Observabilidade de pipelines e modelos](#etapa-3--observabilidade-de-pipelines-e-modelos)
+- [Etapa 4 — Governança, LGPD e causalidade](#etapa-4--governança-lgpd-e-causalidade)
+- [Integração contínua](#integração-contínua)
+- [Lições aprendidas](#lições-aprendidas)
+- [Decisões técnicas e limitações](#decisões-técnicas-e-limitações)
+- [Estrutura do repositório](#estrutura-do-repositório)
+
+## Resultados em um minuto
+
+| Pergunta | Resposta |
+|---|---|
+| Dados ruins chegam ao modelo? | **Não.** Um lote com erros de todas as 7 regras do contrato, inclusive uma coluna de CPF vazada, é bloqueado inteiro e vai para a quarentena. Um arquivo vazio de um parceiro também é barrado. |
+| O monitoramento gera alarme falso? | **Não.** No mês de controle, nenhuma das 23 variáveis acusou drift. |
+| Detecta a mudança cedo? | **Sim.** Uma inflação de 10% nas faturas é detectada já no 2º mês, pelo teste KS. |
+| Quando o modelo degradou? | No mês da crise (M6): AUC de 0,778 para **0,725**, e o modelo previu 29,5% de inadimplência quando a real foi **39,4%**. Alertas críticos disparados. |
+| Por quê? | **Concept drift**: clientes em dia, porém muito endividados, passam a não pagar sem mudar nenhuma variável. Ele causa −0,088 de AUC e **87% da descalibração**. O drift mais visível (atrasos) até melhorou o AUC. |
+| O que fazer? | **Retreinar com dados recentes**: AUC de 0,723 para 0,762 na crise. Recalibrar só corrige a escala do score. |
+| O modelo é justo? | Sexo, idade e estado civil dentro dos limites. Escolaridade **acima do limite** (8,0 p.p. de diferença na recusa de bons pagadores). Retirar idade e escolaridade reduz as diferenças sem perder AUC: recomendado para o próximo retreino. |
+| Está em conformidade com a LGPD? | Base legal de proteção do crédito (art. 7º, X), pseudonimização, minimização, explicação de cada decisão (art. 20), retenção automatizada e resumo de RIPD. |
+| O pipeline é observável? | 32 tarefas medidas por execução, log central em JSON, dashboard com semáforo de saúde e métricas no MLflow, em cerca de 20 segundos. |
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+    RAW[Dataset UCI<br/>versionado + SHA-256] --> PREP[Preparação<br/>limpeza e pseudonimização]
+    PREP --> REF[(Referência)]
+    PREP --> POOL[(Pool de Produção)]
+    REF --> TRAIN[Treino<br/>Regressão Logística x XGBoost]
+    TRAIN --> MODEL[(Modelo campeão<br/>MLflow Registry)]
+    POOL --> SIM[Simulação<br/>meses M1 a M6]
+    SIM --> IN[Lotes recebidos]
+    IN --> GATE{Contrato<br/>Pandera}
+    GATE -- reprovado --> QUAR[Quarentena + alerta]
+    GATE -- aprovado --> PRED[Predição]
+    MODEL --> PRED
+    PRED --> DRIFT[Drift<br/>PSI + KS do Evidently]
+    PRED --> PERF[Desempenho<br/>com os rótulos]
+    DRIFT --> ALERT[Alertas]
+    PERF --> ALERT
+    GATE & PRED & DRIFT & PERF & ALERT --> LOG[(Log central<br/>JSON Lines)]
+    LOG --> DASH[Dashboard de<br/>monitoramento]
+    LOG --> MLF[MLflow]
+    DRIFT & PERF --> GOV[Governança<br/>causalidade, equidade,<br/>explicação, privacidade]
+```
+
+| Camada | Ferramenta | Código |
 |---|---|---|
-| 0 | Fundação do projeto (estrutura, dependências, ingestão do dataset) | concluída |
-| 1 | Validação de dados e contratos + modelo baseline | concluída |
-| 2 | Simulação e detecção de drift | concluída |
-| 3 | Observabilidade de pipelines e modelos | concluída |
-| 4 | Governança, LGPD e causalidade | concluída |
-| 5 | Entrega final (README consolidado, CI, vídeo) | pendente |
-
-## Dataset
-
-**Default of Credit Card Clients** (UCI, 30.000 clientes, CC BY 4.0). Fonte, dicionário de dados e problemas
-de qualidade encontrados estão em [`data/README.md`](data/README.md).
+| Contratos de dados | Pandera | `src/credit_monitoring/contracts/` |
+| Modelo | scikit-learn e XGBoost | `src/credit_monitoring/models/` |
+| Drift | Evidently AI (KS) e PSI próprio | `src/credit_monitoring/drift/` |
+| Observabilidade | Log JSON, `psutil`, MLflow, dashboard Plotly | `src/credit_monitoring/monitoring/` |
+| Governança | SHAP do XGBoost, valores de Shapley, k-anonimato | `src/credit_monitoring/governance/` |
+| Orquestração | `pipeline.py` e Makefile | `src/credit_monitoring/pipeline.py` |
 
 ## Como executar
 
@@ -40,8 +93,9 @@ make all
 ```
 
 `make all` roda o pipeline de ponta a ponta com observabilidade (`make pipeline`), a demonstração do
-contrato e a análise de governança (`make governance`). Ao final, abra `reports/monitoring/dashboard.html` e
-`reports/governance/governance_report.html`. Cada passo também pode ser rodado isoladamente:
+contrato e a análise de governança (`make governance`), em cerca de 1 minuto. Ao final, abra
+`reports/monitoring/dashboard.html` e `reports/governance/governance_report.html`. Cada passo também pode ser
+rodado isoladamente:
 
 | Comando | O que faz |
 |---|---|
@@ -59,6 +113,68 @@ contrato e a análise de governança (`make governance`). Ao final, abra `report
 | `make retention` | Lista os arquivos com prazo de retenção vencido (`APPLY=1` apaga) |
 | `make mlflow-ui` | Abre a interface do MLflow em http://127.0.0.1:5000 |
 | `make test` / `make lint` | Testes automatizados e verificação de estilo |
+
+**Sem `make` (por exemplo, no Windows):**
+
+```bash
+python -m venv .venv
+```
+
+```bash
+.venv\Scripts\activate
+```
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+```bash
+pip install -e . --no-deps
+```
+
+```bash
+python -m credit_monitoring.pipeline
+```
+
+```bash
+python -m credit_monitoring.contracts.demo
+```
+
+```bash
+python -m credit_monitoring.governance.report
+```
+
+## Atendimento aos requisitos
+
+| Requisito do enunciado | Onde está |
+|---|---|
+| **Repositório** | |
+| Pipeline de validação de dados (data contracts) configurado | `contracts/` · `make contract-demo` · [Etapa 1](#contrato-de-dados-pandera) |
+| Scripts de simulação e detecção estatística de drift | `drift/simulate.py`, `drift/monitor.py`, `drift/stats.py` · `make simulate`, `make drift` |
+| Dashboards ou relatórios HTML comprovando o monitoramento | [`drift_report.html`](reports/drift/drift_report.html), `evidently_M1..M6.html`, [`dashboard.html`](reports/monitoring/dashboard.html), [`governance_report.html`](reports/governance/governance_report.html) |
+| Documentação consolidada de governança no README | [Etapa 4](#etapa-4--governança-lgpd-e-causalidade) |
+| Histórico de commits semântico | Conventional Commits (`feat`, `fix`, `docs`, `perf`, `chore`, `build`...) |
+| **Bibliotecas** | |
+| Scikit-Learn / XGBoost | `models/train.py`: Regressão Logística x XGBoost (campeão) |
+| Great Expectations ou Pandera | Pandera: `contracts/schema.py` |
+| Evidently AI | `drift/monitor.py`: `DataDriftPreset` (KS) e `ClassificationPreset` |
+| Prometheus (opcional) | Não usado: o dashboard e o MLflow cobrem a observabilidade |
+| **Boas práticas** | |
+| Separação entre Referência e Produção | `data/prepare.py`: separação única, estratificada e reprodutível ([Etapa 1](#preparação-dos-dados)) |
+| Pelo menos 3 regras rígidas de qualidade | 7 regras (R1 a R7) + 2 de alerta |
+| Relatório estatístico (PSI, KS) | [`feature_drift.csv`](reports/drift/feature_drift.csv) e mapa de PSI no relatório de drift |
+| Documentação de compliance com plano de privacidade | [Plano de proteção de dados](#plano-de-proteção-de-dados-lgpd) |
+| **Etapas e entregáveis** | |
+| 1 — Script de validação operante e modelo baseline treinado | `make contract-demo`, `make train`, [`model_metadata.json`](models/model_metadata.json) |
+| 2 — Relatório de drift apontando as variáveis degradadas | [`drift_report.html`](reports/drift/drift_report.html) e Evidently por mês |
+| 3 — Dashboard ou MLflow com saúde do pipeline, infraestrutura e alertas | [`dashboard.html`](reports/monitoring/dashboard.html) e experimento `credit-scoring-monitoring` |
+| 4 — Governança e causalidade no README + link do vídeo | [Etapa 4](#etapa-4--governança-lgpd-e-causalidade) e link no topo |
+| **Vídeo STAR** | [Roteiro](docs/roteiro_video.md); gravação pelo grupo |
+
+## Dataset
+
+**Default of Credit Card Clients** (UCI, 30.000 clientes, CC BY 4.0). Fonte, dicionário de dados e problemas
+de qualidade encontrados estão em [`data/README.md`](data/README.md).
 
 ## Etapa 1 — Validação de dados e contratos
 
@@ -667,12 +783,74 @@ Plano de ação:
 | `reidentification_risk.csv` | k-anonimato por combinação de atributos |
 
 
-## Estrutura
+## Integração contínua
+
+O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda a cada pull request e a cada push na
+`main`:
+
+1. **Lint e testes** em Python 3.12 e 3.13: `make setup`, `make lint` e `make test`.
+2. **Pipeline completo** em Python 3.12: `make all` a partir de um clone limpo. O resumo da execução aparece na
+   página do workflow e os relatórios gerados ficam disponíveis como artefato (`relatorios`) por 14 dias.
+
+Os testes cobrem contrato de dados, preparação, treino, simulação, detecção de drift, log central, telemetria,
+dashboard, MLflow, explicabilidade, equidade, análise causal, privacidade e uma execução reduzida do pipeline
+de ponta a ponta, inclusive o caso de falha.
+
+## Lições aprendidas
+
+1. **Drift nos dados não é o mesmo que modelo errado.** No mês 5, 20 das 23 variáveis tinham drift e o modelo
+   continuava acertando. Retreinar a cada alerta de drift seria desperdício; o gatilho certo é o desempenho.
+2. **A causa mais grave pode não deixar rastro nas variáveis.** O concept drift derrubou o modelo sem mudar
+   nenhuma delas. Só os rótulos revelam esse problema, então encurtar o atraso dos rótulos e acompanhar a
+   calibração por segmento é tão importante quanto medir drift.
+3. **Ordenar variáveis pelo drift não aponta a causa.** As variáveis que mais mudaram vieram do desemprego, que
+   até melhorou o AUC. Só a análise por intervenção separou causa de correlação.
+4. **O contrato de dados deve descrever o que é plausível, não o que é comum.** Limites baseados na
+   distribuição do treino bloqueariam justamente os lotes com drift legítimo.
+5. **A ferramenta padrão nem sempre mede o que precisamos.** O PSI do Evidently, com faixas de largura igual,
+   não enxergava uma inflação de 30% nas faturas; com faixas por decis, como é praxe em crédito, enxerga.
+6. **Esconder um atributo não torna o modelo justo.** Retirar a escolaridade não reduziu a diferença entre
+   níveis de escolaridade, porque ela vem de variáveis correlacionadas. Equidade se mede, não se presume.
+7. **Pseudonimizar não é anonimizar.** Com idade, sexo, escolaridade, estado civil e limite, 22,6% dos clientes
+   ficam únicos: os dados continuam sendo pessoais e precisam da mesma proteção.
+
+## Decisões técnicas e limitações
+
+**Decisões técnicas**
+
+| Decisão | Motivo |
+|---|---|
+| Python ≥ 3.12 e pandas 2.3 | numpy, scipy e xgboost atuais exigem Python 3.12; o Evidently 0.7 ainda não funciona com pandas 3 |
+| PSI próprio, com faixas pelos decis da referência | O PSI do Evidently usa faixas de largura igual e fica cego a variáveis de cauda longa |
+| KS com α = 0,01 | Com 23 testes por mês, α = 0,05 gerou falso alarme em 33% dos meses sem drift |
+| Base de comparação = teste da Referência | Mesma distribuição do treino, sem o viés otimista dos scores de treino |
+| Modelos no MLflow sem *pickle* | XGBoost no formato nativo e scikit-learn via skops. O artefato local (`models/credit_model.joblib`) usa joblib e não é versionado |
+| Dashboard HTML gerado do log, em vez de Prometheus e Grafana | Abre offline, fica versionado e não exige infraestrutura; o MLflow complementa |
+| Relatórios autocontidos | O Plotly vai embutido, então os HTML abrem sem internet. Os do Evidently têm cerca de 5 MB cada |
+
+**Limitações**
+
+- O dataset é de clientes de Taiwan em 2005, usado como substituto dos dados da fintech; os valores
+  monetários estão em NT$.
+- O drift é simulado. Os mecanismos foram calibrados para serem plausíveis, mas não reproduzem uma crise real.
+- Na simulação, os rótulos estão disponíveis assim que o mês termina; em produção chegariam meses depois, e o
+  desempenho só seria medido com esse atraso.
+- A análise causal por intervenção só é possível porque a simulação é controlada. Em produção, a investigação
+  depende de calibração por segmento, backtesting e experimentos naturais.
+- As referências legais foram levantadas para fins acadêmicos; a definição final cabe ao jurídico e ao
+  encarregado de dados da instituição.
+- A retirada de idade e escolaridade do modelo foi recomendada, mas não aplicada, para não mudar a base de
+  comparação das etapas anteriores.
+
+## Estrutura do repositório
 
 ```
+├── .github/workflows/ci.yml    # integração contínua: lint, testes e pipeline completo
 ├── config/settings.yaml        # configuração central (caminhos, sementes, limites, modelo)
 ├── data/                       # raw (versionado) e camadas geradas
-├── docs/img/                   # capturas de tela usadas neste README
+├── docs/
+│   ├── img/                    # capturas de tela usadas neste README
+│   └── roteiro_video.md        # roteiro do vídeo STAR
 ├── logs/                       # log centralizado do pipeline (não versionado)
 ├── models/                     # metadados do modelo (o binário é gerado por make train)
 ├── reports/
