@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    name: Lint e testes (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Instalar dependências
+        run: make setup PYTHON=python
+
+      - name: Lint
+        run: make lint
+
+      - name: Testes
+        run: make test
+
+  pipeline:
+    name: Pipeline completo (make all)
+    needs: qualidade
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MLFLOW_DISABLE_TELEMETRY: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Instalar dependências
+        run: make setup PYTHON=python
+
+      - name: Executar o pipeline, a demonstração do contrato e a governança
+        shell: bash
+        run: make all 2>&1 | tee pipeline.log
+
+      - name: Resumo da execução
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Pipeline completo"
+            echo
+            echo '```'
+            grep -A 12 -E "^Execução " pipeline.log || tail -n 30 pipeline.log
+            echo '```'
+            echo
+            echo "## Governança"
+            echo
+            echo '```'
+            sed -n '/^Análise causal/,/^Relatório/p' pipeline.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar relatórios e log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: relatorios
+          path: |
+            reports/
+            logs/pipeline.jsonl
+            pipeline.log
+          retention-days: 14
