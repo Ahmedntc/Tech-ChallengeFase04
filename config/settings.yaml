@@ -55,8 +55,9 @@ contract_demo:
 
 model:
   # Atributos fora do modelo por minimização e não discriminação (LGPD, art. 6º, III e IX).
-  # Continuam no dataset apenas para auditoria de vieses (Etapa 4).
-  excluded_features: [sex, marriage]
+  # Continuam no dataset apenas para auditoria de vieses (Etapa 4). Idade e escolaridade
+  # saíram depois da validação cruzada: mesmo AUC e menor disparidade por idade.
+  excluded_features: [sex, marriage, education, age]
   logistic_regression:
     C: 1.0
     max_iter: 2000
@@ -160,11 +161,17 @@ governance:
     equal_opportunity_max_gap: 0.05
     # Variantes do modelo testadas como mitigação: atributos excluídos de cada uma.
     variants:
-      Em produção (sem sexo e estado civil): [sex, marriage]
+      Em produção (sem sexo, estado civil, idade e escolaridade): [sex, marriage, education, age]
+      Versão anterior (sem sexo e estado civil): [sex, marriage]
       Com todos os atributos: []
-      Sem escolaridade: [sex, marriage, education]
-      Sem escolaridade e idade: [sex, marriage, education, age]
+      Sem escolaridade, com idade: [sex, marriage, education]
     seeds: [42, 7, 2026]
+    # Validação cruzada pareada entre duas variantes (partições × repetições).
+    cross_validation:
+      splits: 5
+      repeats: 2
+      baseline: Versão anterior (sem sexo e estado civil)
+      candidate: Em produção (sem sexo, estado civil, idade e escolaridade)
     # Janelas de produção para acompanhar a equidade. Um mês só (1.400 clientes) tem
     # grupos pequenos demais: a diferença varia vários pontos apenas por amostragem.
     production_windows:

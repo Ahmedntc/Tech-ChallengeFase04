@@ -1,6 +1,6 @@
 {
   "batch_name": "M4_parceiro",
-  "validated_at": "2026-11-15T15:20:06+00:00",
+  "validated_at": "2026-11-17T02:55:29+00:00",
   "status": "bloqueado",
   "n_rows": 303,
   "n_rows_with_violations": 19,
@@ -195,19 +195,19 @@
         {
           "indice": 300,
           "coluna": "client_id",
-          "valor": "b920d5f6de8bcdbf",
+          "valor": "849054641bd1ed59",
           "checagem": "R7_registro_duplicado"
         },
         {
           "indice": 301,
           "coluna": "client_id",
-          "valor": "47bb11e0a41cc846",
+          "valor": "61d7c556bbbfb4b8",
           "checagem": "R7_registro_duplicado"
         },
         {
           "indice": 302,
           "coluna": "client_id",
-          "valor": "121cd2b5504b3314",
+          "valor": "83409a74a506ee86",
           "checagem": "R7_registro_duplicado"
         }
       ]

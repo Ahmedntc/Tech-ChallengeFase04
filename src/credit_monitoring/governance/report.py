@@ -30,6 +30,7 @@ from credit_monitoring.governance.explain import feature_label, global_importanc
 from credit_monitoring.governance.fairness import (
     ATTRIBUTE_LABELS,
     compare_variants,
+    cross_validate_variants,
     evaluate,
     production_fairness,
     sampling_noise,
@@ -221,6 +222,7 @@ def build(settings: dict[str, Any] | None = None) -> dict[str, Any]:
     groups, indicators = evaluate(scored_test, bundle.threshold, gov["fairness"])
     refusal_rate = float((bundle.predict_proba(valid) >= bundle.threshold).mean())
     variants = compare_variants(settings, reference, refusal_rate)
+    cv_runs, cv_summary = cross_validate_variants(settings, reference, refusal_rate)
     monthly = load_production(settings, bundle)
     windows = {
         name: pd.concat([monthly[m] for m in months], ignore_index=True)
@@ -256,6 +258,8 @@ def build(settings: dict[str, Any] | None = None) -> dict[str, Any]:
         "groups": groups,
         "indicators": indicators,
         "variants": variants,
+        "cv_runs": cv_runs,
+        "cv_summary": cv_summary,
         "production": production,
         "noise": noise,
         "importance": importance,
@@ -434,7 +438,7 @@ def render(result: dict[str, Any]) -> str:
         {2, 3, 4, 5, 6},
         820,
     )
-    attrs = ["sex", "age_band", "education"]
+    attrs = ["sex", "age_band", "marriage", "education"]
     var_rows = []
     for row in result["variants"].itertuples():
         values = row._asdict()
@@ -451,7 +455,49 @@ def render(result: dict[str, Any]) -> str:
         ["Variante", "Atributos fora", "AUC", "Aprovação"]
         + [f"Recusa indevida: {ATTRIBUTE_LABELS[a].lower()}" for a in attrs],
         var_rows,
-        {2, 3, 4, 5, 6},
+        {2, 3, 4, 5, 6, 7},
+        1080,
+    )
+
+    cv_cfg = fair_cfg["cross_validation"]
+    cv_labels = {
+        "auc": "AUC",
+        "eo_age_band": "Recusa indevida: faixa etária",
+        "eo_marriage": "Recusa indevida: estado civil",
+        "eo_sex": "Recusa indevida: sexo",
+        "eo_education": "Recusa indevida: escolaridade",
+    }
+    cv = result["cv_summary"].set_index("metric")
+    cv_rows = []
+    for metric, label in cv_labels.items():
+        row = cv.loc[metric]
+        if metric == "auc":
+            values = [num(row["baseline"], 4), num(row["candidate"], 4)]
+            diff = f"{_signed(row['difference'], 4)} ({_signed(row['ci_low'], 4)} a {_signed(row['ci_high'], 4)})"
+        else:
+            values = [_pp(row["baseline"]), _pp(row["candidate"])]
+            diff = f"{_signed(100 * row['difference'], 1)} p.p. ({_signed(100 * row['ci_low'], 1)} a {_signed(100 * row['ci_high'], 1)})"
+        significant = row["ci_high"] < 0 or row["ci_low"] > 0
+        cv_rows.append(
+            [
+                f"<b>{label}</b>",
+                *values,
+                diff,
+                "sim" if significant else "não",
+                f"{int(row['folds_better'])} de {int(row['folds'])}",
+            ]
+        )
+    cv_table = _table(
+        [
+            "Métrica",
+            "Versão anterior",
+            "Em produção",
+            "Diferença (IC 95%)",
+            "Diferença significativa?",
+            "Rodadas em que a atual é melhor",
+        ],
+        cv_rows,
+        {1, 2, 3, 5},
         980,
     )
 
@@ -583,6 +629,13 @@ def render(result: dict[str, Any]) -> str:
   de aprovação</b> do modelo em produção, para que nenhuma pareça mais justa só por recusar menos.</p>
   {var_table}
 
+  <h3 style="margin:28px 0 8px">Validação cruzada da mudança de variáveis</h3>
+  <p class="section-note">Antes de retirar idade e escolaridade do modelo, as duas versões foram comparadas em
+  {cv_cfg["splits"]} partições × {cv_cfg["repeats"]} repetições da Referência, sempre no mesmo teste e com a mesma
+  taxa de recusa. A diferença é <b>significativa</b> quando o intervalo de 95% não inclui zero (intervalo
+  aproximado, porque as rodadas compartilham dados de treino).</p>
+  {cv_table}
+
   <h3 style="margin:28px 0 8px">Equidade em produção</h3>
   <p class="section-note">Diferença de recusa indevida entre grupos, com as decisões tomadas em produção. As duas
   últimas colunas mostram quanto essa diferença oscila só por acaso, sem nenhum drift (intervalo central de 90% em
@@ -625,6 +678,12 @@ def save(result: dict[str, Any]) -> Path:
     result["groups"].to_csv(out / "fairness_groups.csv", index=False, float_format="%.6g")
     result["indicators"].to_csv(out / "fairness_indicators.csv", index=False, float_format="%.6g")
     result["variants"].to_csv(out / "fairness_variants.csv", index=False, float_format="%.6g")
+    result["cv_summary"].to_csv(
+        out / "fairness_cross_validation.csv", index=False, float_format="%.6g"
+    )
+    result["cv_runs"].to_csv(
+        out / "fairness_cross_validation_runs.csv", index=False, float_format="%.6g"
+    )
     result["production"].to_csv(out / "fairness_production.csv", index=False, float_format="%.6g")
     result["noise"].to_csv(out / "fairness_sampling_noise.csv", float_format="%.6g")
     result["importance"].rename("mean_abs_contribution").to_csv(

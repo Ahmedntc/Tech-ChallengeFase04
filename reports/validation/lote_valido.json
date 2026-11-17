@@ -1,6 +1,6 @@
 {
   "batch_name": "lote_valido",
-  "validated_at": "2026-11-15T15:20:15+00:00",
+  "validated_at": "2026-11-17T02:55:39+00:00",
   "status": "aprovado",
   "n_rows": 500,
   "n_rows_with_violations": 0,
@@ -133,13 +133,13 @@
         {
           "indice": 246,
           "coluna": "client_id",
-          "valor": "cf00d8ded8648890",
+          "valor": "e1a08b3669128366",
           "checagem": "W2_uso_acima_do_limite"
         },
         {
           "indice": 284,
           "coluna": "client_id",
-          "valor": "2f44053b307e5c4d",
+          "valor": "1e06fc8176ba7171",
           "checagem": "W2_uso_acima_do_limite"
         }
       ]

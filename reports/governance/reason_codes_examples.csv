@@ -1,16 +1,16 @@
 client_id,score,rank,feature,motivo,valor,contribuicao
-4816c7d6d98b1ea0,0.918321,1,pay_status_1,Situação do pagamento no último mês,atraso de 3 meses,1.57387
-4816c7d6d98b1ea0,0.918321,2,bill_amt_1,Valor da fatura no último mês,NT$ 270.960,0.489996
-4816c7d6d98b1ea0,0.918321,3,pay_status_2,Situação do pagamento há 2 meses,atraso de 2 meses,0.430263
-5a16d099453bb5e4,0.740059,1,pay_status_1,Situação do pagamento no último mês,atraso de 2 meses,1.64874
-5a16d099453bb5e4,0.740059,2,pay_status_2,Situação do pagamento há 2 meses,atraso de 2 meses,0.338118
-5a16d099453bb5e4,0.740059,3,pay_amt_1,Valor pago no último mês,NT$ 0,0.201302
-cb2e7ec12e1b1080,0.613808,1,pay_status_1,Situação do pagamento no último mês,atraso de 2 meses,1.68416
-cb2e7ec12e1b1080,0.613808,2,pay_amt_4,Valor pago há 4 meses,NT$ 14.589,0.158138
-cb2e7ec12e1b1080,0.613808,3,pay_amt_1,Valor pago no último mês,NT$ 0,0.152329
-71cdf8e4e3a79401,0.492605,1,pay_status_1,Situação do pagamento no último mês,atraso de 2 meses,1.60856
-71cdf8e4e3a79401,0.492605,2,pay_amt_1,Valor pago no último mês,NT$ 0,0.193737
-71cdf8e4e3a79401,0.492605,3,bill_amt_3,Valor da fatura há 3 meses,NT$ 39.370,0.072334
-356dce050eec45b5,0.37345,1,pay_status_1,Situação do pagamento no último mês,atraso de 2 meses,1.09222
-356dce050eec45b5,0.37345,2,pay_amt_3,Valor pago há 3 meses,NT$ 0,0.198611
-356dce050eec45b5,0.37345,3,pay_amt_1,Valor pago no último mês,NT$ 0,0.155384
+8a89744b9e67ad0c,0.919478,1,pay_status_1,Situação do pagamento no último mês,atraso de 3 meses,1.65071
+8a89744b9e67ad0c,0.919478,2,pay_status_2,Situação do pagamento há 2 meses,atraso de 2 meses,0.393303
+8a89744b9e67ad0c,0.919478,3,pay_status_4,Situação do pagamento há 4 meses,atraso de 2 meses,0.19824
+322c0cbcf5fabe5f,0.762131,1,pay_status_1,Situação do pagamento no último mês,atraso de 2 meses,1.28524
+322c0cbcf5fabe5f,0.762131,2,pay_status_2,Situação do pagamento há 2 meses,atraso de 2 meses,0.35567
+322c0cbcf5fabe5f,0.762131,3,pay_status_3,Situação do pagamento há 3 meses,atraso de 2 meses,0.222906
+f839038996438a43,0.656203,1,pay_status_1,Situação do pagamento no último mês,atraso de 2 meses,1.94164
+f839038996438a43,0.656203,2,bill_amt_1,Valor da fatura no último mês,NT$ 181.057,0.231983
+f839038996438a43,0.656203,3,bill_amt_3,Valor da fatura há 3 meses,NT$ 189.411,0.15571
+4045b6088b8cbf30,0.551257,1,pay_status_1,Situação do pagamento no último mês,atraso de 2 meses,1.52142
+4045b6088b8cbf30,0.551257,2,pay_status_2,Situação do pagamento há 2 meses,atraso de 1 mês,0.18725
+4045b6088b8cbf30,0.551257,3,pay_amt_1,Valor pago no último mês,NT$ 0,0.139991
+fc90b66c13e22a34,0.431748,1,pay_status_2,Situação do pagamento há 2 meses,atraso de 2 meses,0.669853
+fc90b66c13e22a34,0.431748,2,pay_amt_1,Valor pago no último mês,NT$ 0,0.293038
+fc90b66c13e22a34,0.431748,3,limit_bal,Limite de crédito,NT$ 60.000,0.211107

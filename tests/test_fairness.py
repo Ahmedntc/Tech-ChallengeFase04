@@ -6,6 +6,7 @@ from credit_monitoring.data.columns import TARGET
 from credit_monitoring.governance.fairness import (
     add_age_band,
     compare_variants,
+    cross_validate_variants,
     group_metrics,
     indicators,
     sampling_noise,
@@ -95,3 +96,21 @@ def test_sampling_noise_shrinks_with_larger_samples(prepared_df, base_settings):
     small = sampling_noise(pool, scorer, 0.1, 300, cfg, repetitions=15)
     large = sampling_noise(pool, scorer, 0.1, 3000, cfg, repetitions=15)
     assert large["sex"] < small["sex"]
+
+
+def test_cross_validation_compares_both_variants_on_the_same_folds(settings, prepared_df):
+    settings["model"]["xgboost"]["n_estimators"] = 20
+    gov = settings["governance"]["fairness"]
+    gov["variants"] = {"base": ["sex", "marriage"], "nova": ["sex", "marriage", "age"]}
+    gov["cross_validation"] = {"splits": 2, "repeats": 2, "baseline": "base", "candidate": "nova"}
+    reference = prepared_df.sample(4000, random_state=0).reset_index(drop=True)
+
+    runs, summary = cross_validate_variants(settings, reference, refusal_rate=0.25)
+
+    assert len(runs) == 2 * 2 * 2
+    assert runs.groupby("fold")["variant"].apply(set).eq({"base", "nova"}).all()
+    auc = summary.set_index("metric").loc["auc"]
+    assert auc["folds"] == 4
+    assert auc["difference"] == pytest.approx(auc["candidate"] - auc["baseline"])
+    assert auc["ci_low"] <= auc["difference"] <= auc["ci_high"]
+    assert {"eo_age_band", "eo_education", "di_sex"} <= set(summary["metric"])
