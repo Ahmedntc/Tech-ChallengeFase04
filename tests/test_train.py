@@ -16,7 +16,8 @@ def fast_settings(settings):
 def test_excluded_features_stay_out_of_the_model(settings):
     features = model_features(settings)
     assert not set(settings["model"]["excluded_features"]) & set(features)
-    assert "age" in features
+    assert {"sex", "marriage", "age", "education"}.isdisjoint(features)
+    assert "pay_status_1" in features
 
 
 def test_training_produces_usable_and_reloadable_bundle(fast_settings, prepared_df):
