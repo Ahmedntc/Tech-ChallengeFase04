@@ -139,8 +139,8 @@
     "category": "prediction drift",
     "severity": "atenção",
     "subject": "prediction",
-    "message": "Distribuição do score mudou (PSI 0,100).",
-    "value": 0.1003,
+    "message": "Distribuição do score mudou (PSI 0,111).",
+    "value": 0.1113,
     "threshold": 0.1
   },
   {
@@ -229,8 +229,8 @@
     "category": "prediction drift",
     "severity": "atenção",
     "subject": "prediction",
-    "message": "Distribuição do score mudou (PSI 0,132).",
-    "value": 0.1318,
+    "message": "Distribuição do score mudou (PSI 0,160).",
+    "value": 0.1603,
     "threshold": 0.1
   },
   {
@@ -238,8 +238,8 @@
     "category": "desempenho",
     "severity": "crítico",
     "subject": "auc",
-    "message": "AUC caiu 0,053 em relação à referência (0,778 → 0,725).",
-    "value": 0.0533,
+    "message": "AUC caiu 0,052 em relação à referência (0,779 → 0,727).",
+    "value": 0.052,
     "threshold": 0.05
   },
   {
@@ -247,8 +247,8 @@
     "category": "desempenho",
     "severity": "crítico",
     "subject": "calibração",
-    "message": "O modelo subestima o risco: inadimplência real 39,4% x score médio 29,5%.",
-    "value": 0.0993,
+    "message": "O modelo subestima o risco: inadimplência real 39,4% x score médio 30,0%.",
+    "value": 0.0941,
     "threshold": 0.05
   }
 ]

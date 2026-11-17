@@ -1,6 +1,6 @@
 {
   "batch_name": "M6",
-  "validated_at": "2026-11-15T15:20:10+00:00",
+  "validated_at": "2026-11-17T02:55:34+00:00",
   "status": "aprovado",
   "n_rows": 1400,
   "n_rows_with_violations": 0,
@@ -133,31 +133,31 @@
         {
           "indice": 3,
           "coluna": "client_id",
-          "valor": "c891a08107a61658",
+          "valor": "cd61ce52d4b5da83",
           "checagem": "W2_uso_acima_do_limite"
         },
         {
           "indice": 88,
           "coluna": "client_id",
-          "valor": "352b129340cd8993",
+          "valor": "6b65112b4a134cd8",
           "checagem": "W2_uso_acima_do_limite"
         },
         {
           "indice": 135,
           "coluna": "client_id",
-          "valor": "13ec73cffbfcc3c2",
+          "valor": "a944504a9e3c8277",
           "checagem": "W2_uso_acima_do_limite"
         },
         {
           "indice": 193,
           "coluna": "client_id",
-          "valor": "9d5bcaa9133067ae",
+          "valor": "5345f09aa3e4f482",
           "checagem": "W2_uso_acima_do_limite"
         },
         {
           "indice": 250,
           "coluna": "client_id",
-          "valor": "4816c7d6d98b1ea0",
+          "valor": "7fb3e478f7c185c9",
           "checagem": "W2_uso_acima_do_limite"
         }
       ]
