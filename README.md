@@ -39,10 +39,10 @@ Este projeto constrói a camada de sustentação e confiabilidade desse modelo:
 | Dados ruins chegam ao modelo? | **Não.** Um lote com erros de todas as 7 regras do contrato, inclusive uma coluna de CPF vazada, é bloqueado inteiro e vai para a quarentena. Um arquivo vazio de um parceiro também é barrado. |
 | O monitoramento gera alarme falso? | **Não.** No mês de controle, nenhuma das 23 variáveis acusou drift. |
 | Detecta a mudança cedo? | **Sim.** Uma inflação de 10% nas faturas é detectada já no 2º mês, pelo teste KS. |
-| Quando o modelo degradou? | No mês da crise (M6): AUC de 0,778 para **0,725**, e o modelo previu 29,5% de inadimplência quando a real foi **39,4%**. Alertas críticos disparados. |
-| Por quê? | **Concept drift**: clientes em dia, porém muito endividados, passam a não pagar sem mudar nenhuma variável. Ele causa −0,088 de AUC e **87% da descalibração**. O drift mais visível (atrasos) até melhorou o AUC. |
-| O que fazer? | **Retreinar com dados recentes**: AUC de 0,723 para 0,762 na crise. Recalibrar só corrige a escala do score. |
-| O modelo é justo? | Sexo, idade e estado civil dentro dos limites. Escolaridade **acima do limite** (8,0 p.p. de diferença na recusa de bons pagadores). Retirar idade e escolaridade reduz as diferenças sem perder AUC: recomendado para o próximo retreino. |
+| Quando o modelo degradou? | No mês da crise (M6): AUC de 0,779 para **0,727**, e o modelo previu 30,0% de inadimplência quando a real foi **39,4%**. Alertas críticos disparados. |
+| Por quê? | **Concept drift**: clientes em dia, porém muito endividados, passam a não pagar sem mudar nenhuma variável. Ele causa −0,086 de AUC e **93% da descalibração**. O drift mais visível (atrasos) até melhorou o AUC. |
+| O que fazer? | **Retreinar com dados recentes**: AUC de 0,723 para 0,759 na crise. Recalibrar só corrige a escala do score. |
+| O modelo é justo? | Idade e escolaridade saíram do modelo depois de uma validação cruzada: mesmo AUC e disparidade por idade significativamente menor. Sexo, idade e estado civil dentro dos limites; escolaridade ainda **acima do limite** (5,6 p.p. de diferença na recusa de bons pagadores), com plano de ação. |
 | Está em conformidade com a LGPD? | Base legal de proteção do crédito (art. 7º, X), pseudonimização, minimização, explicação de cada decisão (art. 20), retenção automatizada e resumo de RIPD. |
 | O pipeline é observável? | 32 tarefas medidas por execução, log central em JSON, dashboard com semáforo de saúde e métricas no MLflow, em cerca de 20 segundos. |
 
@@ -236,12 +236,14 @@ decisão são escolhidos **só na validação**; o teste serve apenas para repor
 
 | Candidato | AUC validação | AUC teste | KS | Gini | F1 | Recall | Precisão |
 |---|---|---|---|---|---|---|---|
-| Regressão Logística | 0,745 | 0,726 | 0,386 | 0,451 | 0,515 | 0,490 | 0,542 |
-| **XGBoost (campeão)** | **0,788** | **0,778** | **0,436** | **0,557** | **0,532** | **0,560** | **0,506** |
+| Regressão Logística | 0,745 | 0,726 | 0,392 | 0,452 | 0,518 | 0,514 | 0,523 |
+| **XGBoost (campeão)** | **0,788** | **0,779** | **0,434** | **0,558** | **0,543** | **0,512** | **0,578** |
 
-- **Limiar de decisão:** 0,275 (máximo F1 na validação), coerente com a taxa de inadimplência de ~22%.
-- **Atributos fora do modelo:** `sex` e `marriage`, por minimização e não discriminação (LGPD, art. 6º,
-  III e IX). Eles continuam no dataset apenas para a auditoria de vieses da Etapa 4.
+- **Limiar de decisão:** 0,335 (máximo F1 na validação); o modelo aprova 80,4% dos clientes do teste.
+- **Atributos fora do modelo:** `sex`, `marriage`, `age` e `education`, por minimização e não
+  discriminação (LGPD, art. 6º, III e IX). Eles continuam no dataset apenas para a auditoria de vieses.
+  Idade e escolaridade saíram na Etapa 4, depois de uma validação cruzada mostrar que o modelo não perde
+  desempenho e fica mais equilibrado entre faixas etárias ([detalhes](#mitigação-de-vieses)).
 - **Rastreamento:** os dois candidatos ficam registrados no MLflow; o campeão vai para o Model Registry
   como `credit-scoring-model` com o alias `champion`. Cada modelo é salvo no seu formato nativo e
   seguro, sem *pickle*: XGBoost em JSON/UBJ e scikit-learn via skops.
@@ -298,21 +300,24 @@ Cada variável recebe dois testes, que se complementam:
 
 | Mês | Variáveis com drift | Principais | PSI do score | AUC | Score médio | Inadimplência real | Alertas |
 |---|---|---|---|---|---|---|---|
-| M1 | 0/23 | — | 0,003 | 0,766 | 21,9% | 22,1% | 0 |
-| M2 | 1/23 (leve) | `bill_amt_1` | 0,020 | 0,763 | 23,0% | 22,6% | 1 |
-| M3 | 6/23 (leve) | `bill_amt_1..6` | 0,016 | 0,788 | 23,2% | 21,6% | 1 |
-| M4 | 8/23 | `age` (moderado) | 0,007 | 0,801 | 22,7% | 22,4% | 4 |
-| M5 | 20/23 | `pay_status_2` (significativo), `pay_status_1`, `pay_status_3`, `age` | 0,100 | 0,805 | 27,9% | 28,3% | 10 |
-| M6 | 18/23 | `pay_status_2`, `pay_amt_1`, `pay_status_1` (significativos) | 0,132 | **0,725** | 29,5% | **39,4%** | 12 |
+| M1 | 0/23 | — | 0,007 | 0,767 | 22,0% | 22,1% | 0 |
+| M2 | 1/23 (leve) | `bill_amt_1` | 0,013 | 0,761 | 22,9% | 22,6% | 1 |
+| M3 | 6/23 (leve) | `bill_amt_1..6` | 0,020 | 0,786 | 23,3% | 21,6% | 1 |
+| M4 | 8/23 | `age` (moderado) | 0,007 | 0,802 | 23,1% | 22,4% | 4 |
+| M5 | 20/23 | `pay_status_2` (significativo), `pay_status_1`, `pay_status_3`, `age` | 0,111 | 0,805 | 28,2% | 28,3% | 10 |
+| M6 | 18/23 | `pay_status_2`, `pay_amt_1`, `pay_status_1` (significativos) | 0,160 | **0,727** | 30,0% | **39,4%** | 12 |
+
+A idade continua monitorada como variável de entrada dos lotes, mesmo fora do modelo: o drift em `age`
+(M4 a M6) mostra a mudança no perfil dos clientes que chegam.
 
 O que os resultados mostram:
 
 1. **Sem falso alarme:** M1 não acusa drift em nenhuma variável.
 2. **Detecção precoce:** a inflação de 10% em M2 já aparece no KS, mesmo com PSI baixo.
 3. **Data drift nem sempre degrada o modelo:** em M4 e M5 a distribuição muda bastante, mas o AUC se
-   mantém e o score médio acompanha a inadimplência real (27,9% x 28,3% em M5). O modelo ainda acerta.
-4. **Concept drift degrada, e o score sozinho não mostra o tamanho do problema:** em M6 o AUC cai 0,053
-   (alerta crítico) e o modelo **subestima o risco em 10 pontos** (29,5% previsto x 39,4% real).
+   mantém e o score médio acompanha a inadimplência real (28,2% x 28,3% em M5). O modelo ainda acerta.
+4. **Concept drift degrada, e o score sozinho não mostra o tamanho do problema:** em M6 o AUC cai 0,052
+   (alerta crítico) e o modelo **subestima o risco em 9 pontos** (30,0% previsto x 39,4% real).
 5. **O contrato continua atuando em produção:** o lote corrompido do parceiro em M4 é bloqueado e vai
    para a quarentena, gerando alerta crítico de qualidade de dados. Em M5, o arquivo vazio do parceiro
    também vai para a quarentena, com alerta crítico de pipeline, e o mês segue com o lote válido.
@@ -362,9 +367,9 @@ arquivo que os logs de execução, então uma única consulta responde "o que ac
 Exemplo (o lote corrompido do parceiro sendo barrado em M4):
 
 ```json
-{"ts": "2026-11-15T15:20:06.295+00:00", "level": "WARNING", "run_id": "20261115T151952Z-6d6d",
+{"ts": "2026-11-17T02:55:29.657+00:00", "level": "WARNING", "run_id": "20261117T025516Z-380c",
  "event": "task_finished", "task": "ingestao", "month": "M4", "batch": "M4_parceiro.csv",
- "status": "bloqueado", "duration_seconds": 0.1011, "memory_rss_mb": 523.8,
+ "status": "bloqueado", "duration_seconds": 0.0896, "memory_rss_mb": 545.7,
  "rows_in": 303, "rows_out": 0, "rows_rejected": 303,
  "detail": "regras violadas: R1, R2, R3, R4, R5, R6, R7; 19 registro(s) com violação"}
 ```
@@ -435,16 +440,16 @@ offline. Ele é montado só a partir do log centralizado e mostra a execução m
 
 ![Dashboard: saúde do modelo ao longo dos meses](docs/img/dashboard_model.png)
 
-Na execução versionada (`20261115T151952Z-6d6d`):
+Na execução versionada (`20261117T025516Z-380c`):
 
 | Indicador | Valor |
 |---|---|
 | Tarefas executadas | 32 (1 falha e 1 bloqueio, ambos de ingestão e tratados) |
 | Registros processados / rejeitados | 8.400 / 303 |
-| Duração da execução | 20,8 s (as duas anteriores levaram 20,0 s e 24,4 s) |
-| Tarefa mais lenta | Detecção de drift, 4,0 s (média de 2,5 s por mês) |
+| Duração da execução | 21,4 s (as duas anteriores levaram 21,8 s e 25,4 s) |
+| Tarefa mais lenta | Detecção de drift, 3,8 s (média de 2,6 s por mês) |
 | Latência da predição | 7 a 11 ms por 1.000 registros |
-| Pico de memória | 593 MB (limite de 2.048 MB) |
+| Pico de memória | 563 MB (limite de 2.048 MB) |
 | Alertas | 28, sendo 8 críticos |
 | Semáforo | Pipeline em atenção (incidentes tratados), infraestrutura saudável, **modelo crítico** em M6 |
 
@@ -491,8 +496,8 @@ como o pipeline trata esses dados e como os trataria em produção.
 |---|---|---|---|---|
 | Identificador | `ID` → `client_id` | Dado pessoal (identificador) | Não | Pseudonimizado na ingestão (HMAC-SHA256); a chave fica fora do repositório |
 | Sexo e estado civil | `sex`, `marriage` | Dados pessoais com potencial discriminatório | **Não** | Mantidos só para a auditoria de equidade |
-| Idade | `age` | Dado pessoal com potencial discriminatório | Sim | Auditado; retirada recomendada no próximo retreino |
-| Escolaridade | `education` | Dado pessoal; pode funcionar como indicador de origem social | Sim | Auditado; retirada recomendada no próximo retreino |
+| Idade | `age` | Dado pessoal com potencial discriminatório | **Não** (retirada após validação cruzada) | Mantida para a regra de idade mínima do contrato e para a auditoria de equidade |
+| Escolaridade | `education` | Dado pessoal; pode funcionar como indicador de origem social | **Não** (retirada após validação cruzada) | Mantida só para a auditoria de equidade |
 | Limite, faturas e pagamentos | `limit_bal`, `bill_amt_*`, `pay_amt_*` | Dados financeiros pessoais | Sim | — |
 | Histórico de pagamento | `pay_status_*` | Informação de adimplemento (Cadastro Positivo) | Sim | — |
 | Inadimplência | `default` | Resultado da relação de crédito | Rótulo | Chega meses depois; mede o desempenho |
@@ -525,16 +530,16 @@ O projeto atende a esse direito com uma explicação **exata** de cada decisão:
 contribuição de cada variável (valores SHAP), e a soma dessas contribuições reproduz o score.
 
 ```bash
-make explain BATCH=data/incoming/M6.csv CLIENT=4816c7d6d98b1ea0
+make explain BATCH=data/incoming/M6.csv CLIENT=8a89744b9e67ad0c
 ```
 
 ```
-Decisão: RECUSADO (score 91,8%, limiar 27,5%)
+Decisão: RECUSADO (score 91,9%, limiar 33,5%)
 
 Principais motivos que aumentaram o risco:
   1. Situação do pagamento no último mês: atraso de 3 meses
-  2. Valor da fatura no último mês: NT$ 270.960
-  3. Situação do pagamento há 2 meses: atraso de 2 meses
+  2. Situação do pagamento há 2 meses: atraso de 2 meses
+  3. Situação do pagamento há 4 meses: atraso de 2 meses
 ```
 
 (O `client_id` depende da chave de pseudonimização de cada ambiente; use um identificador do seu
@@ -552,7 +557,7 @@ identificação.
 | Princípio | Como está implementado | Onde |
 |---|---|---|
 | Pseudonimização desde a entrada | HMAC-SHA256 com chave em variável de ambiente ou `.secrets/`, nunca no repositório | `data/prepare.py` |
-| Minimização (art. 6º, III) | Sexo e estado civil fora do modelo; colunas não previstas são bloqueadas | `config/settings.yaml`, `contracts/schema.py` |
+| Minimização (art. 6º, III) | Sexo, estado civil, idade e escolaridade fora do modelo; colunas não previstas são bloqueadas | `config/settings.yaml`, `contracts/schema.py` |
 | Não discriminação (art. 6º, IX) | Auditoria de equidade a cada execução de `make governance` | `governance/fairness.py` |
 | Logs sem dados pessoais | Só contagens, métricas e nomes de arquivos; um teste automatizado garante | `monitoring/logger.py` |
 | Retenção por padrão | Prazo por pasta; `make retention` lista os vencidos e `APPLY=1` apaga | `governance/privacy.py` |
@@ -598,7 +603,7 @@ Os prazos automáticos ficam em `config/settings.yaml` (seção `governance.rete
 
 | Risco | Mitigação no projeto | Risco residual |
 |---|---|---|
-| Discriminação de grupos | Sexo e estado civil fora do modelo; auditoria de equidade; recomendação de retirar idade e escolaridade | Diferença por escolaridade acima do limite (plano de ação abaixo) |
+| Discriminação de grupos | Sexo, estado civil, idade e escolaridade fora do modelo (as duas últimas após validação cruzada); auditoria de equidade a cada ciclo | Diferença por escolaridade acima do limite (plano de ação abaixo) |
 | Decisões erradas por degradação do modelo | Monitoramento de drift, desempenho e calibração com alertas; análise causal; plano de retreino | Concept drift só aparece quando os rótulos chegam |
 | Reidentificação | Pseudonimização, relatórios agregados, acesso restrito | 22,6% de registros únicos com o limite: tratar como dado pessoal |
 | Coleta indevida (ex.: CPF vazado) | Regra R1 do contrato bloqueia colunas não previstas | Baixo |
@@ -608,8 +613,7 @@ Os prazos automáticos ficam em `config/settings.yaml` (seção `governance.rete
 
 ### Mitigação de vieses
 
-**Como medir.** No conjunto de teste da Referência e com o limiar do modelo em produção, cada atributo é
-avaliado por dois indicadores:
+**Como medir.** Cada atributo é avaliado por dois indicadores:
 
 - **Impacto desproporcional:** menor taxa de aprovação entre os grupos ÷ maior. Referência usual: regra dos
   4/5 (≥ 0,80).
@@ -619,52 +623,104 @@ avaliado por dois indicadores:
 
 Grupos com menos de 100 clientes ficam fora dos indicadores, por instabilidade estatística.
 
-| Atributo | Impacto desproporcional | Diferença de recusa indevida | Grupo mais recusado |
-|---|---|---|---|
-| Sexo | 0,92 ✔ | 4,5 p.p. ✔ | masculino |
-| Faixa etária | 0,93 ✔ | 5,0 p.p. ✔ (no limite) | 46 anos ou mais |
-| Estado civil | 0,96 ✔ | 1,6 p.p. ✔ | casado(a) |
-| Escolaridade | 0,86 ✔ | **8,0 p.p. ▲** | ensino médio |
+#### 1. O que a primeira auditoria encontrou
 
-**Mitigação testada.** Variantes do modelo, cada uma treinada com 3 sementes e comparada com a **mesma taxa
-de aprovação** (75,5%). Sem isso, uma variante com limiar mais permissivo pareceria mais justa só por recusar
-menos gente.
+O primeiro modelo já deixava sexo e estado civil de fora. Mesmo assim, com o limiar daquela versão, a
+auditoria encontrou a **escolaridade acima do limite** (8,0 p.p. de diferença de recusa indevida) e a
+**idade no limite** (5,0 p.p.). As duas eram usadas pelo modelo.
 
-| Variante | AUC | Recusa indevida: sexo | idade | escolaridade |
-|---|---|---|---|---|
-| **Em produção** (sem sexo e estado civil) | 0,7785 | 4,3 p.p. | 4,3 p.p. | 6,6 p.p. |
-| Com todos os atributos | 0,7817 | **6,1 p.p.** | 4,6 p.p. | 6,7 p.p. |
-| Sem escolaridade | 0,7783 | 4,5 p.p. | 5,3 p.p. | 7,2 p.p. |
-| Sem escolaridade e idade | 0,7788 | 4,2 p.p. | **1,9 p.p.** | **5,4 p.p.** |
+#### 2. Variantes testadas
 
-O que os números mostram:
+Cada variante foi treinada com 3 sementes e comparada com a **mesma taxa de aprovação** do modelo em produção
+(cerca de 80%). Sem isso, uma variante com limiar mais permissivo pareceria mais justa só por recusar menos
+gente.
+
+| Variante | AUC | Recusa indevida: sexo | idade | estado civil | escolaridade |
+|---|---|---|---|---|---|
+| **Em produção** (sem sexo, estado civil, idade e escolaridade) | 0,7788 | 3,4 p.p. | **1,1 p.p.** | 0,9 p.p. | 5,5 p.p. |
+| Versão anterior (sem sexo e estado civil) | 0,7785 | 4,5 p.p. | 3,9 p.p. | 1,7 p.p. | 5,8 p.p. |
+| Com todos os atributos | 0,7817 | **5,6 p.p.** | 4,1 p.p. | 2,1 p.p. | 6,2 p.p. |
+| Sem escolaridade, com idade | 0,7783 | 4,4 p.p. | 4,3 p.p. | 2,5 p.p. | 6,3 p.p. |
 
 1. **Excluir sexo e estado civil foi a decisão certa.** Incluí-los ganharia só 0,003 de AUC e levaria a
-   diferença por sexo de 4,3 para 6,1 p.p., acima do limite.
+   diferença por sexo para 5,6 p.p., acima do limite.
 2. **Esconder um atributo não basta.** Retirar só a escolaridade não reduz a diferença por escolaridade
-   (6,6 → 7,2 p.p.): ela vem de variáveis correlacionadas, como limite e histórico.
-3. **Retirar idade e escolaridade melhora a equidade sem custo de desempenho.** Mesmo AUC (0,7788 contra
-   0,7785), diferença por idade de 4,3 para 1,9 p.p. e por escolaridade de 6,6 para 5,4 p.p.
+   (5,8 → 6,3 p.p.). Parte dela passava pela idade: quem tem ensino médio é, em média, 6 anos mais velho
+   (40 anos, contra 34 na pós-graduação), e 33% têm mais de 45 anos, contra 11%.
+3. **Retirar idade e escolaridade juntas** mantém o AUC e reduz as diferenças em todos os atributos.
 
-**Decisão.** A troca de variáveis do modelo em produção passa por aprovação e muda a base do monitoramento,
-então ela fica registrada para o **próximo retreino**: retirar idade e escolaridade. Como a diferença por
-escolaridade continua perto do limite (5,4 p.p.), o retreino deve testar também a reponderação das amostras
-de treino por grupo, e a auditoria continua a cada ciclo.
+#### 3. Validação cruzada antes de aplicar
+
+O teste acima usa um único conjunto de teste. Antes de trocar o modelo, as duas versões foram comparadas em
+**5 partições × 2 repetições** da Referência (10 rodadas), sempre no mesmo teste e com a mesma taxa de
+recusa. A diferença é significativa quando o intervalo de 95% não inclui zero:
+
+| Métrica | Versão anterior | Sem idade e escolaridade | Diferença (IC 95%) | Rodadas melhores |
+|---|---|---|---|---|
+| AUC | 0,7799 | 0,7789 | −0,0010 (−0,0029 a +0,0009): **não significativa** | 3 de 10 |
+| Recusa indevida: idade | 4,7 p.p. | 3,5 p.p. | **−1,2 p.p.** (−2,3 a −0,2): significativa | 8 de 10 |
+| Recusa indevida: estado civil | 1,5 p.p. | 1,1 p.p. | −0,4 p.p. (−1,1 a +0,2) | 8 de 10 |
+| Recusa indevida: sexo | 1,9 p.p. | 1,9 p.p. | −0,1 p.p. (−0,4 a +0,2) | 8 de 10 |
+| Recusa indevida: escolaridade | 6,6 p.p. | 6,0 p.p. | −0,6 p.p. (−1,2 a +0,0): **não significativa** | 8 de 10 |
+
+A validação **confirmou** que não há perda de desempenho e que a disparidade por idade cai. **Não confirmou**
+a melhora na escolaridade: a queda vista no teste único estava dentro da variação entre amostras. A mesma
+conclusão aparece com a taxa de aprovação do modelo anterior (75,5%).
+
+#### 4. Decisão aplicada
+
+**Idade e escolaridade saíram do modelo** (`config/settings.yaml`, `model.excluded_features`). Motivos:
+
+- mesmo desempenho, com disparidade por idade significativamente menor;
+- **minimização** (LGPD, art. 6º, III): o modelo deixa de usar dois dados pessoais que não melhoram a
+  previsão;
+- a escolaridade pode funcionar como indicador de origem social, informação que a Lei do Cadastro Positivo
+  proíbe (art. 3º, §3º);
+- as explicações ao cliente (art. 20) passam a falar só de comportamento de pagamento, que ele pode mudar.
+
+As duas variáveis continuam no dataset: a idade, para a regra de idade mínima do contrato e para a auditoria;
+a escolaridade, só para a auditoria.
+
+**Efeito colateral do limiar.** A regra da Etapa 1 (máximo F1 na validação) escolheu um limiar de 0,335 para
+o novo modelo, contra 0,275 do anterior. Com isso a aprovação no teste subiu de 75,5% para 80,4%, a precisão
+subiu de 0,506 para 0,578 e o recall caiu de 0,560 para 0,512. É um deslocamento ao longo da mesma curva ROC
+(AUC e KS praticamente iguais), causado pela regra de limiar e não pela retirada das variáveis. Em produção,
+o ponto de corte é uma política de risco e deve ser definido pela área de crédito.
+
+#### 5. Situação atual
+
+No conjunto de teste da Referência, com o modelo em produção:
+
+| Atributo | Impacto desproporcional | Diferença de recusa indevida | Grupo mais recusado |
+|---|---|---|---|
+| Sexo | 0,94 ✔ | 2,9 p.p. ✔ | masculino |
+| Faixa etária | 0,96 ✔ | 1,0 p.p. ✔ | até 28 anos |
+| Estado civil | 0,97 ✔ | 1,0 p.p. ✔ | casado(a) |
+| Escolaridade | 0,88 ✔ | **5,6 p.p. ▲** | ensino médio |
+
+**Ponto em aberto: escolaridade.** A diferença continua acima do limite e vem de variáveis correlacionadas
+(limite, histórico), não do atributo em si. Próximos passos no plano de ação: testar a reponderação das
+amostras de treino por grupo e a criação da variável de comprometimento (fatura ÷ limite), e manter a
+auditoria a cada ciclo de retreino.
 
 **Equidade em produção.** Com as decisões dos meses simulados, agregadas em janelas de 3 meses:
 
 | Atributo | Referência | Meses 1 a 3 | Meses 4 a 6 | Oscilação por acaso em 3 meses | Oscilação por acaso em 1 mês |
 |---|---|---|---|---|---|
-| Sexo | 4,5 p.p. | 5,6 p.p. | 4,2 p.p. | ± 1,8 p.p. | ± 3,0 p.p. |
-| Faixa etária | 5,0 p.p. | 8,4 p.p. | 4,7 p.p. | ± 2,1 p.p. | ± 3,9 p.p. |
-| Estado civil | 1,6 p.p. | 1,7 p.p. | 3,7 p.p. | ± 1,2 p.p. | ± 1,6 p.p. |
-| Escolaridade | 8,0 p.p. | 6,9 p.p. | 6,0 p.p. | ± 2,7 p.p. | ± 5,0 p.p. |
+| Sexo | 2,9 p.p. | 4,0 p.p. | 4,1 p.p. | ± 1,6 p.p. | ± 2,4 p.p. |
+| Faixa etária | 1,0 p.p. | 5,5 p.p. | 4,8 p.p. | ± 1,7 p.p. | ± 3,5 p.p. |
+| Estado civil | 1,0 p.p. | 0,0 p.p. | 4,4 p.p. | ± 1,4 p.p. | ± 1,9 p.p. |
+| Escolaridade | 5,6 p.p. | 5,9 p.p. | 6,2 p.p. | ± 2,3 p.p. | ± 3,4 p.p. |
 
 A oscilação por acaso foi medida sorteando 30 lotes sem nenhum drift. Num mês de 1.400 clientes, a diferença
-oscila até ±5 p.p. só por amostragem, o mesmo tamanho do limite. Por isso a **equidade deve ser acompanhada em
-janelas de pelo menos 3 meses**. Nas janelas de produção, a disparidade estrutural mais relevante continua
-sendo a escolaridade; na crise (meses 4 a 6), os clientes **até 28 anos** passam a ser o grupo de idade mais
-recusado entre os bons pagadores.
+oscila até ±3,5 p.p. só por amostragem, perto do limite de 5. Por isso a **equidade deve ser acompanhada em
+janelas de pelo menos 3 meses**.
+
+Em produção, a diferença por idade (4,8 a 5,5 p.p.) fica bem acima da medida no teste (1,0 p.p.) e da média
+da validação cruzada (3,5 p.p.). Isso mostra por que a auditoria precisa continuar depois da mudança: o
+indicador varia com a amostra e com o perfil dos clientes que chegam. Na crise (meses 4 a 6), com mais clientes
+jovens, os clientes **até 28 anos** passam a ser o grupo de idade mais recusado entre os bons pagadores, e a
+escolaridade continua sendo a disparidade estrutural mais persistente.
 
 ### Análise causal da degradação
 
@@ -707,33 +763,33 @@ dos outros. Assim as interações são divididas de forma justa e a soma dos efe
 
 #### Resultados
 
-Sem nenhum mecanismo, o AUC é 0,774 e o modelo está calibrado; com todos, o AUC cai para 0,717 e a
-inadimplência real fica 10,4 p.p. acima do score médio.
+Sem nenhum mecanismo, o AUC é 0,772 e o modelo está calibrado; com todos, o AUC cai para 0,718 e a
+inadimplência real fica 9,8 p.p. acima do score médio.
 
 | Mecanismo | Efeito no AUC | Efeito em real − score | Efeito no score médio | Efeito na inadimplência real |
 |---|---|---|---|---|
-| Inflação nas faturas | −0,004 | +0,2 p.p. | +0,9 p.p. | +1,1 p.p. |
-| Queda nos pagamentos | +0,002 | −0,7 p.p. | +0,7 p.p. | 0,0 p.p. |
-| Expansão dos limites | +0,007 | −0,1 p.p. | −0,6 p.p. | −0,7 p.p. |
-| Mais clientes jovens | −0,007 | −0,1 p.p. | +0,5 p.p. | +0,4 p.p. |
-| Desemprego (novos atrasos) | +0,030 | +2,1 p.p. | +6,3 p.p. | +8,3 p.p. |
-| **Concept drift** | **−0,086** | **+9,1 p.p.** | 0,0 p.p. | +9,1 p.p. |
-| **Total** | −0,057 | +10,4 p.p. | +7,9 p.p. | +18,3 p.p. |
+| Inflação nas faturas | −0,001 | 0,0 p.p. | +1,2 p.p. | +1,1 p.p. |
+| Queda nos pagamentos | +0,002 | −0,8 p.p. | +0,8 p.p. | 0,0 p.p. |
+| Expansão dos limites | +0,006 | −0,2 p.p. | −0,5 p.p. | −0,7 p.p. |
+| Mais clientes jovens | −0,007 | −0,3 p.p. | +0,7 p.p. | +0,4 p.p. |
+| Desemprego (novos atrasos) | +0,029 | +2,1 p.p. | +6,3 p.p. | +8,3 p.p. |
+| **Concept drift** | **−0,084** | **+9,1 p.p.** | 0,0 p.p. | +9,1 p.p. |
+| **Total** | −0,055 | +9,8 p.p. | +8,5 p.p. | +18,3 p.p. |
 
 | Bloco | Efeito no AUC | Parcela da descalibração |
 |---|---|---|
-| Data drift (5 mecanismos) | **+0,031** ± 0,008 | 13% |
-| Concept drift | **−0,088** ± 0,003 | **87%** |
+| Data drift (5 mecanismos) | **+0,031** ± 0,008 | 7% |
+| Concept drift | **−0,086** ± 0,003 | **93%** |
 
 ![Relatório de governança: análise causal](docs/img/governance_causal.png)
 
 #### Interpretação
 
-1. **A causa da degradação é o concept drift.** Ele explica toda a queda de AUC e 87% da descalibração. É uma
+1. **A causa da degradação é o concept drift.** Ele explica toda a queda de AUC e 93% da descalibração. É uma
    mudança na relação entre as variáveis e a inadimplência, invisível nas variáveis: o modelo não tem como
    percebê-la, e só os rótulos revelam o problema.
 2. **O maior drift não é o culpado.** As variáveis com maior PSI em M6 (`pay_status_2`, `pay_amt_1`,
-   `pay_status_1`) mudaram por causa do desemprego, que **melhorou** o AUC (+0,030): clientes com atrasos novos
+   `pay_status_1`) mudaram por causa do desemprego, que **melhorou** o AUC (+0,029): clientes com atrasos novos
    são fáceis de identificar, e o score subiu junto com o risco (+6,3 p.p. contra +8,3 p.p.). Ordenar variáveis
    pelo drift não identifica a causa da degradação.
 3. **Interações importam.** A inflação não muda nenhum rótulo diretamente, mas aumenta a inadimplência real em
@@ -751,14 +807,14 @@ Média de 5 repetições:
 
 | Resposta | AUC | Real − score | Recall | Precisão | Aprovação |
 |---|---|---|---|---|---|
-| Manter o modelo | 0,723 | 10,9 p.p. | 56,5% | 60,7% | 61,9% |
-| Recalibrar o score | 0,723 | 0,2 p.p. | 90,3% | 48,6% | 23,9% |
-| **Retreinar com dados recentes** | **0,762** | 3,7 p.p. | 64,9% | 62,4% | 57,3% |
+| Manter o modelo | 0,723 | 10,3 p.p. | 52,8% | 64,5% | 66,5% |
+| Recalibrar o score | 0,723 | 0,2 p.p. | 90,5% | 48,7% | 23,7% |
+| **Retreinar com dados recentes** | **0,759** | 3,4 p.p. | 65,0% | 62,0% | 57,0% |
 
 Plano de ação:
 
-1. **Retreinar** com os dados recentes rotulados, com peso maior para eles: recupera 0,038 de AUC e reduz a
-   descalibração de 10,9 para 3,7 p.p.
+1. **Retreinar** com os dados recentes rotulados, com peso maior para eles: recupera 0,035 de AUC e reduz a
+   descalibração de 10,3 para 3,4 p.p.
 2. **Recalibrar só como medida de emergência**, para estimar perdas e precificar. Recalibrar não melhora a
    ordenação (o AUC é o mesmo) e, com o limiar ajustado na crise, a aprovação cairia para 24%: o limiar de
    decisão é uma política de negócio, não um ajuste automático.
@@ -778,6 +834,7 @@ Plano de ação:
 | `retraining.csv` | Comparação entre manter, recalibrar e retreinar |
 | `fairness_indicators.csv`, `fairness_groups.csv` | Indicadores de equidade e métricas por grupo |
 | `fairness_variants.csv` | Variantes do modelo testadas como mitigação |
+| `fairness_cross_validation.csv`, `fairness_cross_validation_runs.csv` | Validação cruzada pareada da retirada de idade e escolaridade |
 | `fairness_production.csv`, `fairness_sampling_noise.csv` | Equidade em produção e oscilação por acaso |
 | `feature_importance.csv`, `reason_codes_examples.csv` | Importância das variáveis e exemplos de motivos de recusa |
 | `reidentification_risk.csv` | k-anonimato por combinação de atributos |
@@ -811,7 +868,10 @@ de ponta a ponta, inclusive o caso de falha.
    não enxergava uma inflação de 30% nas faturas; com faixas por decis, como é praxe em crédito, enxerga.
 6. **Esconder um atributo não torna o modelo justo.** Retirar a escolaridade não reduziu a diferença entre
    níveis de escolaridade, porque ela vem de variáveis correlacionadas. Equidade se mede, não se presume.
-7. **Pseudonimizar não é anonimizar.** Com idade, sexo, escolaridade, estado civil e limite, 22,6% dos clientes
+7. **Um resultado de teste único pode enganar.** A primeira comparação sugeria que retirar idade e
+   escolaridade reduziria as duas disparidades; a validação cruzada confirmou a da idade e mostrou que a da
+   escolaridade estava dentro da variação entre amostras. Mudanças no modelo merecem esse segundo olhar.
+8. **Pseudonimizar não é anonimizar.** Com idade, sexo, escolaridade, estado civil e limite, 22,6% dos clientes
    ficam únicos: os dados continuam sendo pessoais e precisam da mesma proteção.
 
 ## Decisões técnicas e limitações
@@ -824,6 +884,8 @@ de ponta a ponta, inclusive o caso de falha.
 | PSI próprio, com faixas pelos decis da referência | O PSI do Evidently usa faixas de largura igual e fica cego a variáveis de cauda longa |
 | KS com α = 0,01 | Com 23 testes por mês, α = 0,05 gerou falso alarme em 33% dos meses sem drift |
 | Base de comparação = teste da Referência | Mesma distribuição do treino, sem o viés otimista dos scores de treino |
+| Sexo, estado civil, idade e escolaridade fora do modelo | Minimização e não discriminação; a retirada de idade e escolaridade foi validada por validação cruzada (mesmo AUC, disparidade por idade menor) |
+| Limiar pelo máximo F1 na validação | Regra simples e reprodutível para o projeto; em produção, o ponto de corte seria uma política de risco da área de crédito |
 | Modelos no MLflow sem *pickle* | XGBoost no formato nativo e scikit-learn via skops. O artefato local (`models/credit_model.joblib`) usa joblib e não é versionado |
 | Dashboard HTML gerado do log, em vez de Prometheus e Grafana | Abre offline, fica versionado e não exige infraestrutura; o MLflow complementa |
 | Relatórios autocontidos | O Plotly vai embutido, então os HTML abrem sem internet. Os do Evidently têm cerca de 5 MB cada |
@@ -839,8 +901,8 @@ de ponta a ponta, inclusive o caso de falha.
   depende de calibração por segmento, backtesting e experimentos naturais.
 - As referências legais foram levantadas para fins acadêmicos; a definição final cabe ao jurídico e ao
   encarregado de dados da instituição.
-- A retirada de idade e escolaridade do modelo foi recomendada, mas não aplicada, para não mudar a base de
-  comparação das etapas anteriores.
+- A disparidade por escolaridade continua acima do limite (5,6 p.p.) mesmo com a variável fora do modelo; a
+  reponderação das amostras de treino ainda precisa ser testada.
 
 ## Estrutura do repositório
 

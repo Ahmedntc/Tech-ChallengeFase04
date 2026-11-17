@@ -64,7 +64,7 @@ adaptem livremente, mas mantenham os números, que são os que o pipeline gera.
 
 **Tela:** `drift_report.html`. Mostrar a linha do tempo e o mapa de PSI; depois, rapidamente, `evidently_M6.html`.
 
-> Separamos os dados uma única vez: uma Referência para treinar o XGBoost, com AUC de 0,778, e um pool de
+> Separamos os dados uma única vez: uma Referência para treinar o XGBoost, com AUC de 0,779, e um pool de
 > produção que o modelo nunca viu. A partir dele simulamos seis meses que pioram: inflação, mais clientes
 > jovens, desemprego e, no último mês, uma crise. Cada variável é comparada com a referência por dois testes: o
 > PSI, que mede o tamanho da mudança, e o teste de Kolmogorov-Smirnov do Evidently, que mede se ela é
@@ -85,8 +85,8 @@ adaptem livremente, mas mantenham os números, que são os que o pipeline gera.
 
 **Tela:** terminal com `make explain`; depois o README, seção "Plano de proteção de dados".
 
-> O identificador do cliente é pseudonimizado na entrada, sexo e estado civil ficam fora do modelo, e os logs
-> não guardam dado pessoal. A base legal é a proteção do crédito, do artigo 7º da LGPD. Para o artigo 20, que
+> O identificador do cliente é pseudonimizado na entrada, sexo, estado civil, idade e escolaridade ficam fora
+> do modelo, e os logs não guardam dado pessoal. A base legal é a proteção do crédito, do artigo 7º da LGPD. Para o artigo 20, que
 > garante a revisão de decisões automatizadas, qualquer decisão pode ser explicada: aqui, os três motivos que
 > mais aumentaram o risco deste cliente recusado.
 
@@ -96,16 +96,18 @@ adaptem livremente, mas mantenham os números, que são os que o pipeline gera.
 análise causal e a tabela de prescrição.
 
 > No quinto mês, vinte das vinte e três variáveis tinham drift, e mesmo assim o modelo acertava: o score médio
-> acompanhava a inadimplência real. No sexto mês, a crise: o AUC caiu para 0,725 e o modelo previa 29,5% de
+> acompanhava a inadimplência real. No sexto mês, a crise: o AUC caiu para 0,727 e o modelo previa 30% de
 > inadimplência quando a real foi 39,4%. Os alertas críticos dispararam.
 >
 > Para saber a causa, ligamos e desligamos cada mecanismo da crise em todas as combinações, com 1.280
-> simulações. O resultado: 87% da descalibração vêm do concept drift, clientes em dia, mas muito endividados,
+> simulações. O resultado: 93% da descalibração vêm do concept drift, clientes em dia, mas muito endividados,
 > que passam a não pagar sem que nenhuma variável mude. O drift mais visível, o dos atrasos, até melhorou o
-> AUC. E a solução foi testada: retreinar com os dados recentes recupera 0,038 de AUC.
+> AUC. E a solução foi testada: retreinar com os dados recentes recupera 0,035 de AUC.
 >
-> Na equidade, encontramos uma diferença acima do limite entre níveis de escolaridade, e mostramos que
-> retirar idade e escolaridade do modelo reduz as disparidades sem perder desempenho.
+> Na equidade, a auditoria encontrou disparidades por idade e escolaridade. Testamos retirar as duas do
+> modelo e confirmamos com validação cruzada: o desempenho é o mesmo e a disparidade por idade cai, então a
+> mudança foi aplicada. A escolaridade continua acima do limite, porque a diferença vem de outras variáveis,
+> e segue no plano de ação.
 
 ## Lições aprendidas (4:40 a 5:00)
 
