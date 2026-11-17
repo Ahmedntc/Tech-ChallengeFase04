@@ -79,41 +79,71 @@ flowchart LR
 | Observabilidade | Log JSON, `psutil`, MLflow, dashboard Plotly | `src/credit_monitoring/monitoring/` |
 | Governança | SHAP do XGBoost, valores de Shapley, k-anonimato | `src/credit_monitoring/governance/` |
 | Orquestração | `pipeline.py` e Makefile | `src/credit_monitoring/pipeline.py` |
+| Infraestrutura | Docker e Docker Compose | `Dockerfile`, `docker-compose.yml` |
 
 ## Como executar
 
-Requer **Python 3.12 ou superior** e `make`.
+### Com Docker (recomendado)
+
+Basta ter o **Docker** (o Docker Desktop já inclui o Compose) e o `make`. Não é preciso instalar Python nem
+dependências: tudo fica na imagem, com as mesmas versões na sua máquina e no CI.
 
 ```bash
-make setup
+make docker-build
 ```
 
 ```bash
-make all
+make docker-all
 ```
 
-**Se o `python3` da máquina for mais antigo** (o Ubuntu 22.04, por exemplo, vem com o 3.10), o `make setup`
-avisa e para. Instale o Python 3.12 e indique-o ao setup, que recria o ambiente virtual do zero. No Ubuntu:
+`make docker-all` roda, dentro do container, o pipeline de ponta a ponta com observabilidade, a demonstração
+do contrato e a análise de governança, em cerca de 1 minuto. A pasta do projeto é montada no container, então
+os resultados aparecem na sua máquina: abra `reports/monitoring/dashboard.html` e
+`reports/governance/governance_report.html`.
+
+Qualquer comando da tabela abaixo roda no container com o prefixo `docker-`: `make docker-test`,
+`make docker-explain BATCH=data/incoming/M6.csv CLIENT=<client_id>` e assim por diante. A interface do MLflow
+abre com `make docker-mlflow-ui`, em http://127.0.0.1:5000, e `make docker-shell` abre um terminal dentro do
+container.
+
+**Sem `make` (por exemplo, no Windows):**
 
 ```bash
-sudo add-apt-repository ppa:deadsnakes/ppa
+docker compose build
 ```
 
 ```bash
-sudo apt update && sudo apt install python3.12 python3.12-venv
+docker compose run --rm app
 ```
 
 ```bash
-make setup PYTHON=python3.12
+docker compose run --rm app make test
 ```
 
-`make all` roda o pipeline de ponta a ponta com observabilidade (`make pipeline`), a demonstração do
-contrato e a análise de governança (`make governance`), em cerca de 1 minuto. Ao final, abra
-`reports/monitoring/dashboard.html` e `reports/governance/governance_report.html`. Cada passo também pode ser
-rodado isoladamente:
+```bash
+docker compose up mlflow
+```
+
+Como o container está configurado:
+
+- Imagem `python:3.12-slim` com as dependências fixadas em `requirements*.txt`. A camada de dependências só é
+  refeita quando esses arquivos mudam; mudanças no código não exigem novo build, porque a pasta do projeto é
+  montada no container.
+- O container roda com o seu usuário, e não como root, para que os arquivos gerados sejam seus. Os atalhos do
+  Makefile cuidam disso; sem `make`, no Linux, rode `docker compose` com `HOST_UID=$(id -u) HOST_GID=$(id -g)`
+  na frente se o seu usuário não tiver o UID 1000.
+- A chave de pseudonimização (`.secrets/`) nunca entra na imagem: fica na sua máquina ou vem da variável
+  `PSEUDONYMIZATION_KEY`.
+- A interface do MLflow é publicada só em 127.0.0.1, porque mostra dados de clientes.
+
+### Comandos
+
+Cada passo pode ser rodado isoladamente, no container (`make docker-<comando>`) ou no ambiente local
+(`make <comando>`):
 
 | Comando | O que faz |
 |---|---|
+| `make all` | Pipeline completo, demonstração do contrato e governança |
 | `make data` | Garante o dataset bruto e verifica sua integridade (SHA-256) |
 | `make prepare` | Limpa, pseudonimiza e separa Referência x Pool de Produção |
 | `make contract-demo` | Aprova um lote válido e bloqueia um lote corrompido |
@@ -126,10 +156,26 @@ rodado isoladamente:
 | `make governance` | Análise causal, equidade, explicabilidade e privacidade |
 | `make explain BATCH=lote.csv CLIENT=id` | Explica a decisão de crédito de um cliente |
 | `make retention` | Lista os arquivos com prazo de retenção vencido (`APPLY=1` apaga) |
-| `make mlflow-ui` | Abre a interface do MLflow em http://127.0.0.1:5000 |
 | `make test` / `make lint` | Testes automatizados e verificação de estilo |
+| `make mlflow-ui` | Interface do MLflow em http://127.0.0.1:5000 (no Docker: `make docker-mlflow-ui`) |
 
-**Sem `make` (por exemplo, no Windows):**
+### Sem Docker (ambiente local)
+
+Útil para desenvolver com o Python da máquina. Requer **Python 3.12 ou superior** e `make`:
+
+```bash
+make setup
+```
+
+```bash
+make all
+```
+
+Se o `python3` da máquina for mais antigo (o Ubuntu 22.04, por exemplo, vem com o 3.10), o `make setup` avisa
+e para. Nesse caso, use o Docker ou instale o Python 3.12 e indique-o ao setup, que recria o ambiente virtual do
+zero: `make setup PYTHON=python3.12`.
+
+Sem `make`, os comandos equivalentes são:
 
 ```bash
 python -m venv .venv
@@ -478,7 +524,10 @@ Cada execução também é registrada no experimento `credit-scoring-monitoring`
   como artefatos.
 
 O treino continua no experimento `credit-scoring-training`, com o modelo campeão no Model Registry.
-Para explorar: `make mlflow-ui`. A telemetria de uso do MLflow fica desativada, então nada sai do ambiente.
+Para explorar: `make docker-mlflow-ui` (ou `make mlflow-ui` no ambiente local). A telemetria de uso do MLflow
+fica desativada, então nada sai do ambiente. O banco guarda o caminho absoluto dos artefatos, que é `/app` no
+container e outro na sua máquina; se você alternar entre os dois modos (ou mover a pasta do projeto), o
+experimento antigo é preservado com outro nome e um novo é criado no caminho atual.
 
 ![MLflow: métricas do monitoramento por mês](docs/img/mlflow_monitoring.png)
 
@@ -860,9 +909,11 @@ Plano de ação:
 O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda a cada pull request e a cada push na
 `main`:
 
-1. **Lint e testes** em Python 3.12 e 3.13: `make setup`, `make lint` e `make test`.
-2. **Pipeline completo** em Python 3.12: `make all` a partir de um clone limpo. O resumo da execução aparece na
-   página do workflow e os relatórios gerados ficam disponíveis como artefato (`relatorios`) por 14 dias.
+1. **Lint e testes** no Docker, com imagens em Python 3.12 e 3.13: `make docker-build`, `make docker-lint` e
+   `make docker-test`.
+2. **Pipeline completo**: `make docker-all` a partir de um clone limpo, com a mesma imagem usada localmente. O
+   resumo da execução aparece na página do workflow e os relatórios gerados ficam disponíveis como artefato
+   (`relatorios`) por 14 dias.
 
 Os testes cobrem contrato de dados, preparação, treino, simulação, detecção de drift, log central, telemetria,
 dashboard, MLflow, explicabilidade, equidade, análise causal, privacidade e uma execução reduzida do pipeline
@@ -895,6 +946,7 @@ de ponta a ponta, inclusive o caso de falha.
 
 | Decisão | Motivo |
 |---|---|
+| Docker como forma padrão de execução | O mesmo ambiente na máquina de qualquer pessoa e no CI, sem depender do Python instalado. O ambiente local continua como alternativa para desenvolvimento |
 | Python ≥ 3.12 e pandas 2.3 | numpy, scipy e xgboost atuais exigem Python 3.12; o Evidently 0.7 ainda não funciona com pandas 3 |
 | PSI próprio, com faixas pelos decis da referência | O PSI do Evidently usa faixas de largura igual e fica cego a variáveis de cauda longa |
 | KS com α = 0,01 | Com 23 testes por mês, α = 0,05 gerou falso alarme em 33% dos meses sem drift |
@@ -922,7 +974,7 @@ de ponta a ponta, inclusive o caso de falha.
 ## Estrutura do repositório
 
 ```
-├── .github/workflows/ci.yml    # integração contínua: lint, testes e pipeline completo
+├── .github/workflows/ci.yml    # integração contínua no Docker: lint, testes e pipeline completo
 ├── config/settings.yaml        # configuração central (caminhos, sementes, limites, modelo)
 ├── data/                       # raw (versionado) e camadas geradas
 ├── docs/
@@ -945,7 +997,9 @@ de ponta a ponta, inclusive o caso de falha.
 │   ├── pipeline.py             # orquestração de ponta a ponta com observabilidade
 │   └── reporting.py            # estilo e gráficos compartilhados pelos relatórios HTML
 ├── tests/                      # testes automatizados (pytest)
-├── Makefile                    # atalhos de execução
+├── Dockerfile                  # imagem do projeto (Python 3.12 + dependências fixadas)
+├── docker-compose.yml          # serviços app (pipeline e comandos) e mlflow (interface)
+├── Makefile                    # atalhos de execução (locais e docker-*)
 ├── requirements.txt            # dependências de execução (versões fixas)
 └── requirements-dev.txt        # dependências de desenvolvimento
 ```
