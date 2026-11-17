@@ -1,21 +1,38 @@
 # Atalhos do projeto. Requer Python >= 3.12.
+VENV := .venv
+
+# No Windows, o Python se chama "python" e os executáveis do ambiente virtual ficam em Scripts/.
+ifeq ($(OS),Windows_NT)
+PYTHON ?= python
+BIN    := $(VENV)/Scripts
+else
 PYTHON ?= python3
-VENV   := .venv
 BIN    := $(VENV)/bin
-PY     := $(BIN)/python
+endif
+PY := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup data prepare contract-demo validate train simulate drift pipeline dashboard \
-	governance explain retention mlflow-ui all lint format test clean
+.PHONY: help setup check-venv data prepare contract-demo validate train simulate drift pipeline \
+	dashboard governance explain retention mlflow-ui all lint format test clean
 
 help: ## Lista os comandos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
 
-setup: ## Cria o ambiente virtual e instala as dependências
-	$(PYTHON) -m venv $(VENV)
+setup: ## Cria o ambiente virtual e instala as dependências (PYTHON=python3.12 para escolher a versão)
+	@$(PYTHON) -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" || ( \
+		echo "O projeto requer Python 3.12 ou superior. Encontrado: $$($(PYTHON) --version 2>&1)."; \
+		echo "Instale o Python 3.12 e rode: make setup PYTHON=python3.12"; exit 1)
+	$(PYTHON) -m venv --clear $(VENV)
 	$(PY) -m pip install --upgrade pip
 	$(PY) -m pip install -r requirements-dev.txt
 	$(PY) -m pip install -e . --no-deps
+
+# Os demais comandos usam o Python do ambiente virtual: sem ele, orienta a rodar o setup.
+check-venv:
+	$(if $(wildcard $(PY) $(PY).exe),,$(error Ambiente virtual não encontrado em $(VENV)/. Rode primeiro: make setup))
+
+data prepare contract-demo validate train simulate drift pipeline dashboard governance explain \
+retention mlflow-ui lint format test: check-venv
 
 data: ## Garante o dataset bruto e verifica sua integridade
 	$(PY) -m credit_monitoring.data.download
