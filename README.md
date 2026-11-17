@@ -92,6 +92,21 @@ make setup
 make all
 ```
 
+**Se o `python3` da máquina for mais antigo** (o Ubuntu 22.04, por exemplo, vem com o 3.10), o `make setup`
+avisa e para. Instale o Python 3.12 e indique-o ao setup, que recria o ambiente virtual do zero. No Ubuntu:
+
+```bash
+sudo add-apt-repository ppa:deadsnakes/ppa
+```
+
+```bash
+sudo apt update && sudo apt install python3.12 python3.12-venv
+```
+
+```bash
+make setup PYTHON=python3.12
+```
+
 `make all` roda o pipeline de ponta a ponta com observabilidade (`make pipeline`), a demonstração do
 contrato e a análise de governança (`make governance`), em cerca de 1 minuto. Ao final, abra
 `reports/monitoring/dashboard.html` e `reports/governance/governance_report.html`. Cada passo também pode ser
