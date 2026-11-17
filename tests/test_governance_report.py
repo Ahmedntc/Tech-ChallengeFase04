@@ -11,6 +11,7 @@ def test_governance_report_is_built_from_a_pipeline_run(pipeline_run):
     gov["causal"].update(month="M5", seeds=2)
     gov["retraining"]["repetitions"] = 1
     gov["fairness"]["seeds"] = [1]
+    gov["fairness"]["cross_validation"].update(splits=2, repeats=1)
     gov["fairness"]["production_windows"] = {"Início": ["M1"], "Crise": ["M4", "M5"]}
     gov["retention"] = {str(tmp / "quarantine"): 90}
 
@@ -29,6 +30,7 @@ def test_governance_report_is_built_from_a_pipeline_run(pipeline_run):
         "retraining.csv",
         "fairness_indicators.csv",
         "fairness_variants.csv",
+        "fairness_cross_validation.csv",
         "fairness_production.csv",
         "reason_codes_examples.csv",
         "reidentification_risk.csv",

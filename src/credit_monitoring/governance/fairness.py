@@ -110,6 +110,35 @@ def evaluate(
     )
 
 
+def _fit_and_evaluate(
+    settings: dict[str, Any],
+    features: list[str],
+    train: pd.DataFrame,
+    valid: pd.DataFrame,
+    test: pd.DataFrame,
+    refusal_rate: float,
+    seed: int,
+) -> dict[str, float]:
+    """Treina o XGBoost com as features dadas e mede desempenho e equidade no teste.
+
+    O limiar é o quantil do score na validação que produz a taxa de recusa pedida.
+    """
+    model = XGBClassifier(
+        **settings["model"]["xgboost"], eval_metric="logloss", random_state=seed
+    ).fit(train[features], train[TARGET])
+    threshold = float(np.quantile(model.predict_proba(valid[features])[:, 1], 1 - refusal_rate))
+    scored = test.assign(score=model.predict_proba(test[features])[:, 1])
+    _, ind = evaluate(scored, threshold, settings["governance"]["fairness"])
+    row = {
+        "auc": float(roc_auc_score(test[TARGET], scored["score"])),
+        "approval_rate": float((scored["score"] < threshold).mean()),
+    }
+    for item in ind.itertuples():
+        row[f"di_{item.attribute}"] = item.disparate_impact
+        row[f"eo_{item.attribute}"] = item.equal_opportunity_gap
+    return row
+
+
 def compare_variants(
     settings: dict[str, Any], reference: pd.DataFrame, refusal_rate: float
 ) -> pd.DataFrame:
@@ -125,29 +154,81 @@ def compare_variants(
     for name, excluded in cfg["variants"].items():
         features = [f for f in FEATURES if f not in excluded]
         for seed in cfg["seeds"]:
-            model = XGBClassifier(
-                **settings["model"]["xgboost"], eval_metric="logloss", random_state=seed
-            ).fit(train[features], train[TARGET])
-            threshold = float(
-                np.quantile(model.predict_proba(valid[features])[:, 1], 1 - refusal_rate)
-            )
-            scored = test.assign(score=model.predict_proba(test[features])[:, 1])
-            _, ind = evaluate(scored, threshold, cfg)
-            row = {
-                "variant": name,
-                "excluded": ", ".join(excluded) or "nenhum",
-                "seed": seed,
-                "auc": float(roc_auc_score(test[TARGET], scored["score"])),
-                "approval_rate": float((scored["score"] < threshold).mean()),
-            }
-            for item in ind.itertuples():
-                row[f"di_{item.attribute}"] = item.disparate_impact
-                row[f"eo_{item.attribute}"] = item.equal_opportunity_gap
-            rows.append(row)
+            row = _fit_and_evaluate(settings, features, train, valid, test, refusal_rate, seed)
+            rows.append({"variant": name, "excluded": ", ".join(excluded) or "nenhum", **row})
     runs = pd.DataFrame(rows)
-    summary = runs.drop(columns="seed").groupby(["variant", "excluded"], sort=False).mean()
+    summary = runs.groupby(["variant", "excluded"], sort=False).mean()
     summary["auc_std"] = runs.groupby("variant", sort=False)["auc"].std().to_numpy()
     return summary.reset_index()
+
+
+# Métricas em que um valor maior é melhor (nas demais, menor é melhor).
+HIGHER_IS_BETTER = ("auc", "di_")
+
+
+def cross_validate_variants(
+    settings: dict[str, Any], reference: pd.DataFrame, refusal_rate: float
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Validação cruzada repetida e pareada entre duas variantes do modelo.
+
+    A Referência é dividida em k partições estratificadas, r vezes com embaralhamentos
+    diferentes. Em cada rodada, uma partição é o teste e o restante vira treino (80%) e
+    validação (20%, usada só para fixar o limiar na mesma taxa de recusa). As duas
+    variantes são avaliadas **no mesmo teste**, então a diferença entre elas não sofre
+    com a variação de amostra de uma partição para outra.
+
+    Devolve as métricas por rodada e, para cada métrica, a diferença média
+    (candidata − base), o intervalo de 95% (t de Student, aproximado porque as rodadas
+    compartilham dados de treino) e em quantas rodadas a candidata foi melhor.
+    """
+    from scipy import stats
+    from sklearn.model_selection import RepeatedStratifiedKFold, train_test_split
+
+    cfg = settings["governance"]["fairness"]
+    cv = cfg["cross_validation"]
+    seed = settings["project"]["random_seed"]
+    compared = {name: cfg["variants"][name] for name in (cv["baseline"], cv["candidate"])}
+    folds = RepeatedStratifiedKFold(
+        n_splits=cv["splits"], n_repeats=cv["repeats"], random_state=seed
+    )
+    rows = []
+    for fold, (train_idx, test_idx) in enumerate(folds.split(reference, reference[TARGET])):
+        rest, test = reference.iloc[train_idx], reference.iloc[test_idx]
+        train, valid = train_test_split(
+            rest,
+            test_size=settings["split"]["valid_size"],
+            stratify=rest[TARGET],
+            random_state=seed + fold,
+        )
+        for name, excluded in compared.items():
+            features = [f for f in FEATURES if f not in excluded]
+            row = _fit_and_evaluate(settings, features, train, valid, test, refusal_rate, seed)
+            rows.append({"variant": name, "fold": fold, **row})
+    runs = pd.DataFrame(rows)
+
+    metrics = [c for c in runs.columns if c not in ("variant", "fold")]
+    by_variant = runs.pivot(index="fold", columns="variant", values=metrics)
+    summary = []
+    for metric in metrics:
+        base = by_variant[(metric, cv["baseline"])]
+        candidate = by_variant[(metric, cv["candidate"])]
+        diff = candidate - base
+        n = len(diff)
+        half_width = stats.t.ppf(0.975, n - 1) * diff.std(ddof=1) / np.sqrt(n)
+        better = diff > 0 if metric.startswith(HIGHER_IS_BETTER) else diff < 0
+        summary.append(
+            {
+                "metric": metric,
+                "baseline": float(base.mean()),
+                "candidate": float(candidate.mean()),
+                "difference": float(diff.mean()),
+                "ci_low": float(diff.mean() - half_width),
+                "ci_high": float(diff.mean() + half_width),
+                "folds_better": int(better.sum()),
+                "folds": n,
+            }
+        )
+    return runs, pd.DataFrame(summary)
 
 
 def sampling_noise(

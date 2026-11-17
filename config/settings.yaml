@@ -165,6 +165,12 @@ governance:
       Sem escolaridade: [sex, marriage, education]
       Sem escolaridade e idade: [sex, marriage, education, age]
     seeds: [42, 7, 2026]
+    # Validação cruzada pareada entre duas variantes (partições × repetições).
+    cross_validation:
+      splits: 5
+      repeats: 2
+      baseline: Em produção (sem sexo e estado civil)
+      candidate: Sem escolaridade e idade
     # Janelas de produção para acompanhar a equidade. Um mês só (1.400 clientes) tem
     # grupos pequenos demais: a diferença varia vários pontos apenas por amostragem.
     production_windows:
