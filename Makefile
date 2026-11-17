@@ -1,5 +1,8 @@
-# Atalhos do projeto. Requer Python >= 3.12.
-VENV := .venv
+# Atalhos do projeto. Dois modos de execução:
+#   - Docker (recomendado): make docker-build e depois make docker-<alvo>, sem instalar Python;
+#   - ambiente local: make setup (requer Python >= 3.12) e depois make <alvo>.
+# Dentro do container, VENV aponta para o ambiente da imagem (/opt/venv).
+VENV ?= .venv
 
 # No Windows, o Python se chama "python" e os executáveis do ambiente virtual ficam em Scripts/.
 ifeq ($(OS),Windows_NT)
@@ -13,10 +16,12 @@ PY := $(BIN)/python
 
 .DEFAULT_GOAL := help
 .PHONY: help setup check-venv data prepare contract-demo validate train simulate drift pipeline \
-	dashboard governance explain retention mlflow-ui all lint format test clean
+	dashboard governance explain retention mlflow-ui all lint format test clean \
+	docker-build docker-setup docker-shell docker-mlflow-ui
 
 help: ## Lista os comandos disponíveis
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
+	@printf "  %-18s %s\n" "docker-<alvo>" "Roda qualquer alvo acima no container (ex.: make docker-all, make docker-test)"
 
 setup: ## Cria o ambiente virtual e instala as dependências (PYTHON=python3.12 para escolher a versão)
 	@$(PYTHON) -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" || ( \
@@ -90,4 +95,28 @@ test: ## Roda a suíte de testes
 
 clean: ## Remove caches (mantém o dataset bruto)
 	rm -rf .pytest_cache .ruff_cache
-	find . -path ./$(VENV) -prune -o -type d -name __pycache__ -exec rm -rf {} +
+	find . -path ./.venv -prune -o -type d -name __pycache__ -exec rm -rf {} +
+
+# --- Docker ---------------------------------------------------------------------------------------
+# O container roda com o seu usuário, para que os arquivos gerados na pasta do projeto sejam seus.
+# Os parâmetros dos alvos (BATCH, CLIENT, APPLY) são repassados para dentro do container.
+DOCKER_COMPOSE ?= docker compose
+PYTHON_VERSION ?= 3.12
+DOCKER_ENV := HOST_UID=$(shell id -u 2>/dev/null) HOST_GID=$(shell id -g 2>/dev/null) PYTHON_VERSION=$(PYTHON_VERSION)
+DOCKER_RUN := $(DOCKER_ENV) $(DOCKER_COMPOSE) run --rm app
+DOCKER_ARGS = $(if $(BATCH),BATCH=$(BATCH)) $(if $(CLIENT),CLIENT=$(CLIENT)) $(if $(APPLY),APPLY=$(APPLY))
+
+docker-build: ## Constrói a imagem Docker (PYTHON_VERSION=3.13 para outra versão do Python)
+	$(DOCKER_ENV) $(DOCKER_COMPOSE) build app
+
+docker-shell: ## Abre um terminal dentro do container
+	$(DOCKER_RUN) bash
+
+docker-mlflow-ui: ## Abre a interface do MLflow (Docker) em http://127.0.0.1:5000
+	$(DOCKER_ENV) $(DOCKER_COMPOSE) up mlflow
+
+docker-setup:
+	@echo "No Docker não há setup: as dependências já estão na imagem. Rode: make docker-build"
+
+docker-%:
+	$(DOCKER_RUN) make $* $(DOCKER_ARGS)

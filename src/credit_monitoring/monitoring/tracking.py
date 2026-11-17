@@ -13,6 +13,7 @@ os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
 os.environ.setdefault("MLFLOW_DISABLE_TELEMETRY", "true")
 
 import mlflow  # noqa: E402
+from mlflow.tracking import MlflowClient  # noqa: E402
 
 
 def tracking_uri(settings: dict[str, Any]) -> str:
@@ -20,13 +21,24 @@ def tracking_uri(settings: dict[str, Any]) -> str:
 
 
 def use_experiment(settings: dict[str, Any], experiment_key: str) -> str:
-    """Aponta o MLflow para o banco local e ativa (ou cria) o experimento indicado."""
+    """Aponta o MLflow para o banco local e ativa (ou cria) o experimento indicado.
+
+    O MLflow grava no banco o caminho absoluto da pasta de artefatos. Se o banco veio de outro
+    caminho do projeto (pasta movida, ou execução alternada entre o Docker, em /app, e o ambiente
+    local), esse caminho não existe aqui e o registro de artefatos falharia. Nesse caso o
+    experimento antigo é preservado com outro nome e um novo é criado no caminho atual.
+    """
     mlflow.set_tracking_uri(tracking_uri(settings))
     name = settings["mlflow"][experiment_key]
+    artifact_uri = resolve_path(settings["mlflow"]["artifact_dir"]).as_uri()
     experiment = mlflow.get_experiment_by_name(name)
+    if experiment is not None and experiment.artifact_location != artifact_uri:
+        old_id, old_location = experiment.experiment_id, experiment.artifact_location
+        archived = f"{name} (id {old_id}, artefatos em {old_location})"
+        MlflowClient().rename_experiment(old_id, archived)
+        experiment = None
     if experiment is None:
-        artifact_root = resolve_path(settings["mlflow"]["artifact_dir"])
-        experiment_id = mlflow.create_experiment(name, artifact_location=artifact_root.as_uri())
+        experiment_id = mlflow.create_experiment(name, artifact_location=artifact_uri)
     else:
         experiment_id = experiment.experiment_id
     mlflow.set_experiment(experiment_id=experiment_id)

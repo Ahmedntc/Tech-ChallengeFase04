@@ -1,4 +1,9 @@
-from credit_monitoring.monitoring.tracking import log_monitoring_run, mlflow, month_metrics
+from credit_monitoring.monitoring.tracking import (
+    log_monitoring_run,
+    mlflow,
+    month_metrics,
+    use_experiment,
+)
 
 
 def test_month_metrics_combine_model_pipeline_and_infrastructure(pipeline_run):
@@ -30,3 +35,19 @@ def test_monitoring_run_is_logged_with_one_step_and_one_child_run_per_month(pipe
     assert m5["metrics.failed_batches"] == 1
     artifacts = {a.path for a in client.list_artifacts(m5["run_id"])}
     assert artifacts == {"alerts.json", "evidently_M5.html"}
+
+
+def test_experiment_from_another_project_path_is_preserved_and_recreated_here(settings, tmp_path):
+    # Banco criado com o projeto em outro caminho (ex.: /app no Docker), onde estão os artefatos.
+    other = settings["mlflow"] | {"artifact_dir": str(tmp_path / "outro_caminho" / "mlruns")}
+    old_id = use_experiment(settings | {"mlflow": other}, "monitoring_experiment")
+
+    new_id = use_experiment(settings, "monitoring_experiment")
+
+    name = settings["mlflow"]["monitoring_experiment"]
+    current = mlflow.get_experiment_by_name(name)
+    assert new_id != old_id and current.experiment_id == new_id
+    assert current.artifact_location == (tmp_path / "mlruns").as_uri()
+    archived = mlflow.get_experiment(old_id)
+    assert archived.name.startswith(f"{name} (id {old_id}") and "outro_caminho" in archived.name
+    assert use_experiment(settings, "monitoring_experiment") == new_id

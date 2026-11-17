@@ -1,0 +1,44 @@
+# Infraestrutura do projeto em containers. Com make instalado, prefira os atalhos (make help):
+#   make docker-build          constrói a imagem
+#   make docker-all            pipeline completo + demonstração do contrato + governança
+#   make docker-test           qualquer alvo do Makefile vira docker-<alvo>
+#   make docker-mlflow-ui      interface do MLflow em http://127.0.0.1:5000
+#
+# Sem make, os equivalentes são:
+#   docker compose build
+#   docker compose run --rm app                (roda make all)
+#   docker compose run --rm app make test
+#   docker compose up mlflow
+#
+# A pasta do projeto é montada em /app: os relatórios, o log, o banco do MLflow e a chave de
+# pseudonimização ficam na sua máquina, e não dentro do container.
+
+x-app: &app
+  image: credit-monitoring
+  build:
+    context: .
+    args:
+      PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
+  # Roda com o seu usuário (os atalhos do Makefile preenchem HOST_UID e HOST_GID), para que os
+  # arquivos gerados não fiquem com o root como dono.
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  working_dir: /app
+  volumes:
+    - .:/app
+  environment:
+    HOME: /tmp
+    # Opcional: chave de pseudonimização vinda de um cofre de segredos. Vazia, o projeto usa
+    # .secrets/pseudonymization.key (criada na primeira execução e nunca copiada para a imagem).
+    PSEUDONYMIZATION_KEY: ${PSEUDONYMIZATION_KEY:-}
+
+services:
+  app:
+    <<: *app
+    command: make all
+
+  mlflow:
+    <<: *app
+    command: mlflow ui --backend-store-uri sqlite:///mlflow.db --host 0.0.0.0 --port 5000
+    # Publicada só em 127.0.0.1: a interface mostra dados de clientes e não deve ficar exposta na rede.
+    ports:
+      - "127.0.0.1:5000:5000"

@@ -1,0 +1,33 @@
+# Fica fora da imagem: segredos, ambientes locais e tudo o que o pipeline gera.
+# No docker compose a pasta do projeto é montada como volume, então nada disso faz falta.
+
+# Segredos (a chave de pseudonimização nunca vai para a imagem)
+.secrets/
+.env
+
+# Controle de versão, CI e ambientes locais
+.git/
+.github/
+.venv/
+**/__pycache__/
+**/*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Artefatos gerados
+data/*
+!data/raw/
+!data/README.md
+logs/
+mlruns/
+mlartifacts/
+mlflow.db
+models/*.joblib
+reports/
+pipeline.log
+
+# Documentação e arquivos do Docker
+docs/
+Dockerfile
+docker-compose.yml
+.dockerignore
